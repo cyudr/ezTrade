@@ -25,6 +25,7 @@ interface PortfolioSummaryProps {
   sectors: SectorAllocation[];
   nav: number;
   dayPnlPct: number;
+  searchQuery?: string;
   onExecuteOrder: (order: {
     ticker: string;
     side: 'BUY' | 'SELL';
@@ -42,6 +43,7 @@ export const PortfolioSummary: React.FC<PortfolioSummaryProps> = ({
   sectors,
   nav,
   dayPnlPct,
+  searchQuery = '',
   onExecuteOrder,
   onOpenNewAllocation,
   onExportCsv,
@@ -53,7 +55,13 @@ export const PortfolioSummary: React.FC<PortfolioSummaryProps> = ({
   const [orderType, setOrderType] = useState('LMT');
   const [limitPrice, setLimitPrice] = useState('165.50');
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [filterTicker, setFilterTicker] = useState('');
+  const [filterTicker, setFilterTicker] = useState(searchQuery);
+
+  React.useEffect(() => {
+    if (searchQuery !== undefined) {
+      setFilterTicker(searchQuery);
+    }
+  }, [searchQuery]);
 
   const dayPnlDollars = (nav * dayPnlPct) / 100;
 
@@ -98,9 +106,23 @@ export const PortfolioSummary: React.FC<PortfolioSummaryProps> = ({
     }
   };
 
-  const filteredPositions = positions.filter((p) =>
-    p.ticker.toLowerCase().includes(filterTicker.toLowerCase())
-  );
+  const effectiveFilter = filterTicker.toLowerCase().trim();
+
+  const filteredPositions = positions.filter((p) => {
+    if (!effectiveFilter) return true;
+    return (
+      p.ticker.toLowerCase().includes(effectiveFilter) ||
+      (p as any).name?.toLowerCase().includes(effectiveFilter)
+    );
+  });
+
+  const filteredWatchlist = watchlist.filter((item) => {
+    if (!effectiveFilter) return true;
+    return (
+      item.ticker.toLowerCase().includes(effectiveFilter) ||
+      item.name?.toLowerCase().includes(effectiveFilter)
+    );
+  });
 
   return (
     <div className="flex flex-col gap-3 pb-20 md:pb-6">
@@ -427,7 +449,7 @@ export const PortfolioSummary: React.FC<PortfolioSummaryProps> = ({
                 </tr>
               </thead>
               <tbody>
-                {watchlist.map((item) => {
+                {filteredWatchlist.map((item) => {
                   const isDistPos = item.dist200dMa >= 0;
                   return (
                     <tr

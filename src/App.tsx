@@ -394,6 +394,8 @@ export default function App() {
             <MarketOverview
               tickers={tickers}
               sentimentFeed={sentimentFeed}
+              searchQuery={searchQuery}
+              onSearchChange={setSearchQuery}
               onSelectTicker={(symbol) => handleNavigateToResearch(symbol, 'TREND')}
               onNavigateToResearch={(symbol) => handleNavigateToResearch(symbol, 'TREND')}
             />
@@ -427,6 +429,7 @@ export default function App() {
               sectors={sectors}
               nav={nav}
               dayPnlPct={dayPnlPct}
+              searchQuery={searchQuery}
               onExecuteOrder={handleExecuteOrder}
               onOpenNewAllocation={() => setIsNewAllocationOpen(true)}
               onExportCsv={handleExportCsv}

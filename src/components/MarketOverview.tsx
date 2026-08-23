@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   TrendingUp,
   TrendingDown,
@@ -14,16 +14,20 @@ import {
   Filter,
   BarChart2,
   BookOpen,
+  X,
 } from 'lucide-react';
 import { TickerItem, SentimentItem } from '../types';
 import { CORRELATION_MATRICES } from '../data/mockData';
-import { getUniverseTicker } from '../data/tickerVerse';
+import { getUniverseTicker, searchTickerVerse, UniverseTicker } from '../data/tickerVerse';
 import { getMarketSessionForSymbol } from '../utils/marketHours';
+import { getTickerApiStatus } from '../utils/tickerApiStatus';
 import { TickerVerseExplorer } from './TickerVerseExplorer';
 
 interface MarketOverviewProps {
   tickers: TickerItem[];
   sentimentFeed: SentimentItem[];
+  searchQuery?: string;
+  onSearchChange?: (query: string) => void;
   onSelectTicker?: (symbol: string) => void;
   onNavigateToResearch?: (symbol: string) => void;
 }
@@ -31,6 +35,8 @@ interface MarketOverviewProps {
 export const MarketOverview: React.FC<MarketOverviewProps> = ({
   tickers,
   sentimentFeed,
+  searchQuery = '',
+  onSearchChange,
   onSelectTicker,
   onNavigateToResearch,
 }) => {
@@ -39,10 +45,6 @@ export const MarketOverview: React.FC<MarketOverviewProps> = ({
   const [activeSentimentFilter, setActiveSentimentFilter] = useState<
     'ALL' | 'HAWKISH' | 'BEARISH' | 'NEUTRAL'
   >('ALL');
-  const [hoveredCell, setHoveredCell] = useState<{ row: string; col: string; val: number } | null>(
-    null
-  );
-
   const [selectedAssetCategory, setSelectedAssetCategory] = useState<
     'EQUITIES' | 'FX_SGD' | 'CRYPTO_SGD'
   >('EQUITIES');
@@ -72,6 +74,12 @@ export const MarketOverview: React.FC<MarketOverviewProps> = ({
       assetClass: 'US_EQUITY',
     };
   };
+
+  // Filtered universe search matches when query is typed
+  const matchingFilteredTickers = useMemo(() => {
+    if (!searchQuery || searchQuery.trim().length === 0) return [];
+    return searchTickerVerse(searchQuery);
+  }, [searchQuery]);
 
   const spx = getTicker('SPX');
   const ndx = getTicker('NDX');
@@ -167,15 +175,25 @@ export const MarketOverview: React.FC<MarketOverviewProps> = ({
           {tickers.concat(tickers).map((t, idx) => {
             const isPos = t.changePct >= 0;
             const session = getMarketSessionForSymbol(t.symbol);
+            const isMatch =
+              searchQuery &&
+              (t.symbol.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                t.name?.toLowerCase().includes(searchQuery.toLowerCase()));
+
             return (
               <span
                 key={`${t.symbol}-${idx}`}
                 onClick={() => handleTickerClick(t.symbol)}
-                className="inline-flex items-center mx-3 gap-1.5 cursor-pointer transition-colors hover:underline"
-                style={{ color: 'var(--text-secondary)' }}
+                className={`inline-flex items-center mx-3 gap-1.5 cursor-pointer transition-all hover:underline ${
+                  isMatch ? 'px-2 py-0.5 rounded font-bold' : ''
+                }`}
+                style={{
+                  color: isMatch ? 'var(--accent-text)' : 'var(--text-secondary)',
+                  backgroundColor: isMatch ? 'var(--accent-subtle)' : 'transparent',
+                }}
                 title={`Click to inspect ${t.symbol} in Research Terminal`}
               >
-                <span className="font-bold" style={{ color: 'var(--text-muted)' }}>
+                <span className="font-bold" style={{ color: isMatch ? 'var(--accent-primary)' : 'var(--text-muted)' }}>
                   {t.symbol}
                 </span>
                 <span
@@ -208,7 +226,7 @@ export const MarketOverview: React.FC<MarketOverviewProps> = ({
         </div>
       </div>
 
-      {/* Main Mode Switcher: Matrix vs 500+ Universe (Subtle Outline Selection Bar) */}
+      {/* Main Mode Switcher & Filter Controls Bar */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2.5 pb-1">
         <div
           className="flex items-center p-0.5 rounded-lg border"
@@ -249,10 +267,37 @@ export const MarketOverview: React.FC<MarketOverviewProps> = ({
           </button>
         </div>
 
-        {/* Live Indicator pill */}
-        <div className="flex items-center gap-2 text-xs font-mono-val">
+        {/* Search Input inline with mode bar */}
+        <div className="flex items-center gap-2 w-full sm:w-auto">
+          <div className="relative flex-1 sm:w-64">
+            <Search
+              className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2"
+              style={{ color: 'var(--text-muted)' }}
+            />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => onSearchChange?.(e.target.value)}
+              placeholder="Filter ticker (e.g. NVDA, BTC, AAPL)..."
+              className="w-full pl-8 pr-7 py-1 rounded-lg border text-xs font-mono-val transition-all focus:outline-none"
+              style={{
+                backgroundColor: 'var(--bg-card)',
+                borderColor: searchQuery ? 'var(--accent-primary)' : 'var(--border-subtle)',
+                color: 'var(--text-primary)',
+              }}
+            />
+            {searchQuery && (
+              <button
+                onClick={() => onSearchChange?.('')}
+                className="absolute right-2 top-1/2 -translate-y-1/2 text-muted hover:opacity-100 cursor-pointer"
+              >
+                <X className="w-3 h-3" />
+              </button>
+            )}
+          </div>
+
           <span
-            className="flex items-center gap-1.5 px-2.5 py-1 rounded-md border"
+            className="hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-md border text-xs font-mono-val shrink-0"
             style={{
               backgroundColor: 'var(--bg-card-subtle)',
               borderColor: 'var(--border-subtle)',
@@ -264,6 +309,107 @@ export const MarketOverview: React.FC<MarketOverviewProps> = ({
           </span>
         </div>
       </div>
+
+      {/* DYNAMIC FILTERED TICKER SEARCH RESULTS (Appears when user types into Filter Ticker) */}
+      {searchQuery && searchQuery.trim().length > 0 && (
+        <div
+          className="bento-card rounded-xl p-3.5 flex flex-col gap-3 animate-in fade-in duration-150"
+          style={{ borderColor: 'var(--accent-primary)' }}
+        >
+          <div className="flex items-center justify-between border-b pb-2" style={{ borderColor: 'var(--border-subtle)' }}>
+            <div className="flex items-center gap-2">
+              <span
+                className="p-1 rounded font-bold text-[10px] font-mono-val uppercase border"
+                style={{
+                  backgroundColor: 'var(--accent-subtle)',
+                  borderColor: 'var(--accent-primary)',
+                  color: 'var(--accent-text)',
+                }}
+              >
+                Filtered Tickers
+              </span>
+              <span className="font-mono-val text-xs font-bold" style={{ color: 'var(--text-primary)' }}>
+                {matchingFilteredTickers.length} Result{matchingFilteredTickers.length === 1 ? '' : 's'} for "{searchQuery}"
+              </span>
+            </div>
+            <button
+              onClick={() => onSearchChange?.('')}
+              className="text-xs font-mono-val opacity-70 hover:opacity-100 cursor-pointer flex items-center gap-1"
+              style={{ color: 'var(--text-secondary)' }}
+            >
+              Clear Filter <X className="w-3 h-3" />
+            </button>
+          </div>
+
+          {matchingFilteredTickers.length === 0 ? (
+            <div className="p-4 text-center text-xs font-mono-val" style={{ color: 'var(--text-muted)' }}>
+              No matching tickers found for "{searchQuery}". Try symbols like AAPL, NVDA, BTC, ETH, SGD, EUR.
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2.5 max-h-[360px] overflow-y-auto custom-scrollbar pr-1">
+              {matchingFilteredTickers.map((ticker) => {
+                const isUp = ticker.changePct >= 0;
+                const apiStatus = getTickerApiStatus(ticker.symbol);
+
+                return (
+                  <div
+                    key={ticker.symbol}
+                    onClick={() => handleTickerClick(ticker.symbol)}
+                    className="p-2.5 rounded-lg border transition-all cursor-pointer hover:border-blue-500/60 hover:scale-[1.01]"
+                    style={{
+                      backgroundColor: 'var(--bg-card-subtle)',
+                      borderColor: 'var(--border-subtle)',
+                    }}
+                    title={`Click to open Research Terminal for ${ticker.symbol}`}
+                  >
+                    <div className="flex justify-between items-start">
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-1.5">
+                          <span className="font-mono-val font-bold text-xs" style={{ color: 'var(--text-primary)' }}>
+                            {ticker.symbol}
+                          </span>
+                          <span
+                            className="text-[9px] font-mono-val px-1 py-0.2 rounded"
+                            style={{
+                              backgroundColor: 'var(--bg-card)',
+                              color: 'var(--text-muted)',
+                              border: '1px solid var(--border-subtle)',
+                            }}
+                          >
+                            {ticker.sector}
+                          </span>
+                        </div>
+                        <div className="text-[11px] truncate" style={{ color: 'var(--text-secondary)' }}>
+                          {ticker.name}
+                        </div>
+                      </div>
+
+                      <div className="text-right font-mono-val">
+                        <div className="font-bold text-xs" style={{ color: 'var(--text-primary)' }}>
+                          ${ticker.price > 10 ? ticker.price.toFixed(2) : ticker.price.toFixed(4)}
+                        </div>
+                        <div
+                          className="text-[10px] font-semibold"
+                          style={{ color: isUp ? 'var(--color-positive)' : 'var(--color-negative)' }}
+                        >
+                          {isUp ? '+' : ''}{ticker.changePct.toFixed(2)}%
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center justify-between pt-1.5 mt-1.5 border-t text-[9px] font-mono-val" style={{ borderColor: 'var(--border-subtle)' }}>
+                      <span style={{ color: 'var(--text-muted)' }}>Vol: {ticker.volume}</span>
+                      <span className="flex items-center gap-0.5 font-bold" style={{ color: 'var(--accent-text)' }}>
+                        Research <ChevronRight className="w-2.5 h-2.5" />
+                      </span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* VIEW A: BENCHMARK MATRIX & LIVE SENTIMENT */}
       {activeMarketTab === 'OVERVIEW' && (
@@ -489,7 +635,7 @@ export const MarketOverview: React.FC<MarketOverviewProps> = ({
             </div>
           </div>
 
-          {/* Right Column: Live Sentiment Feed (TOP 5 VISIBLE, SCROLLABLE CONTAINER) */}
+          {/* Right Column: Live Sentiment Feed */}
           <div
             id="sentiment-panel"
             className="col-span-12 lg:col-span-4 bento-card rounded-xl p-3.5 flex flex-col h-[560px]"
@@ -528,7 +674,7 @@ export const MarketOverview: React.FC<MarketOverviewProps> = ({
               </div>
             </div>
 
-            {/* Feed Items Container: Top 5 visible, rest accessible via smooth scrolling */}
+            {/* Feed Items Container */}
             <div className="flex-1 overflow-y-auto pr-1 space-y-2 custom-scrollbar max-h-[480px]">
               {filteredSentiment.map((item, idx) => {
                 const isHawk = item.sentiment === 'HAWKISH';
@@ -633,6 +779,8 @@ export const MarketOverview: React.FC<MarketOverviewProps> = ({
       {/* VIEW B: 500+ TICKER UNIVERSE EXPLORER */}
       {activeMarketTab === 'TICKER_VERSE' && (
         <TickerVerseExplorer
+          initialSearchQuery={searchQuery}
+          onSearchChange={onSearchChange}
           onSelectTicker={(ticker) => handleTickerClick(ticker.symbol)}
         />
       )}

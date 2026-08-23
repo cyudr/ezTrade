@@ -228,7 +228,7 @@
   animation: subtleTickDown 0.5s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-/* Ticker tape scroll animation */
+/* Ticker tape scroll animation - calibrated to human-readable viewing speed */
 @keyframes tickerScroll {
   0% { transform: translate3d(0, 0, 0); }
   100% { transform: translate3d(-50%, 0, 0); }
@@ -237,11 +237,13 @@
 .ticker-animation {
   display: inline-flex;
   white-space: nowrap;
-  animation: tickerScroll 35s linear infinite;
+  animation: tickerScroll 180s linear infinite;
+  will-change: transform;
 }
 
-.ticker-animation:hover {
-  animation-play-state: paused;
+.ticker-animation:hover,
+.ticker-animation-paused {
+  animation-play-state: paused !important;
 }
 
 /* Subtle, refined heatmap indicators (non-aggressive, pastel) */
