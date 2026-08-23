@@ -50,63 +50,71 @@ async function fetchYahooQuote(
   name: string,
   assetClass: 'US_EQUITY' | 'BOND' | 'FX' | 'CRYPTO'
 ): Promise<LiveStockItem | null> {
-  try {
-    const url = `https://query1.finance.yahoo.com/v8/finance/chart/${yahooSymbol}?interval=1d&range=5d`;
-    const res = await fetch(url, {
-      headers: {
-        'User-Agent':
-          'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-        Accept: 'application/json',
-      },
-    });
+  const hosts = ['query1.finance.yahoo.com', 'query2.finance.yahoo.com'];
 
-    if (!res.ok) return null;
+  for (const host of hosts) {
+    try {
+      const url = `https://${host}/v8/finance/chart/${yahooSymbol}?interval=1d&range=5d`;
+      const res = await fetch(url, {
+        signal: AbortSignal.timeout(3500),
+        headers: {
+          'User-Agent':
+            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+          Accept: 'application/json',
+          'Accept-Language': 'en-US,en;q=0.9',
+        },
+      });
 
-    const data = await res.json();
-    const result = data?.chart?.result?.[0];
-    if (!result) return null;
+      if (!res.ok) continue;
 
-    const meta = result.meta;
-    const currentPrice = meta.regularMarketPrice || meta.chartPreviousClose || 0;
-    const prevClose = meta.chartPreviousClose || meta.previousClose || currentPrice;
-    const change = currentPrice - prevClose;
-    const changePct = prevClose > 0 ? (change / prevClose) * 100 : 0;
-    const high = meta.regularMarketDayHigh || meta.dayHigh || currentPrice;
-    const low = meta.regularMarketDayLow || meta.dayLow || currentPrice;
-    const rawVolume = meta.regularMarketVolume || 0;
+      const data = await res.json();
+      const result = data?.chart?.result?.[0];
+      if (!result) continue;
 
-    let volStr = 'N/A';
-    if (rawVolume >= 1e9) volStr = `${(rawVolume / 1e9).toFixed(2)}B`;
-    else if (rawVolume >= 1e6) volStr = `${(rawVolume / 1e6).toFixed(1)}M`;
-    else if (rawVolume >= 1e3) volStr = `${(rawVolume / 1e3).toFixed(0)}K`;
+      const meta = result.meta;
+      const currentPrice = meta.regularMarketPrice || meta.chartPreviousClose || 0;
+      const prevClose = meta.chartPreviousClose || meta.previousClose || currentPrice;
+      const change = currentPrice - prevClose;
+      const changePct = prevClose > 0 ? (change / prevClose) * 100 : 0;
+      const high = meta.regularMarketDayHigh || meta.dayHigh || currentPrice;
+      const low = meta.regularMarketDayLow || meta.dayLow || currentPrice;
+      const rawVolume = meta.regularMarketVolume || 0;
 
-    // Sparkline from close timestamps
-    const quoteCloses: number[] = result?.indicators?.quote?.[0]?.close || [];
-    const validCloses = quoteCloses.filter((c) => typeof c === 'number' && !isNaN(c) && c > 0);
-    const sparkline =
-      validCloses.length >= 4
-        ? validCloses.slice(-7)
-        : [prevClose * 0.995, prevClose * 0.998, prevClose, currentPrice];
+      let volStr = 'N/A';
+      if (rawVolume >= 1e9) volStr = `${(rawVolume / 1e9).toFixed(2)}B`;
+      else if (rawVolume >= 1e6) volStr = `${(rawVolume / 1e6).toFixed(1)}M`;
+      else if (rawVolume >= 1e3) volStr = `${(rawVolume / 1e3).toFixed(0)}K`;
 
-    const precision = symbolKey === 'US10Y' ? 3 : assetClass === 'FX' ? 4 : 2;
+      // Sparkline from close timestamps
+      const quoteCloses: number[] = result?.indicators?.quote?.[0]?.close || [];
+      const validCloses = quoteCloses.filter((c) => typeof c === 'number' && !isNaN(c) && c > 0);
+      const sparkline =
+        validCloses.length >= 4
+          ? validCloses.slice(-7)
+          : [prevClose * 0.995, prevClose * 0.998, prevClose, currentPrice];
 
-    return {
-      symbol: symbolKey,
-      name,
-      price: parseFloat(currentPrice.toFixed(precision)),
-      change: parseFloat(change.toFixed(precision)),
-      changePct: parseFloat(changePct.toFixed(2)),
-      high: parseFloat(high.toFixed(precision)),
-      low: parseFloat(low.toFixed(precision)),
-      volume: volStr,
-      sparkline: sparkline.map((p) => parseFloat(p.toFixed(precision))),
-      assetClass,
-      lastClose: parseFloat(prevClose.toFixed(precision)),
-    };
-  } catch (err) {
-    console.warn(`Error fetching Yahoo quote for ${symbolKey}:`, err);
-    return null;
+      const precision = symbolKey === 'US10Y' ? 3 : assetClass === 'FX' ? 4 : 2;
+
+      return {
+        symbol: symbolKey,
+        name,
+        price: parseFloat(currentPrice.toFixed(precision)),
+        change: parseFloat(change.toFixed(precision)),
+        changePct: parseFloat(changePct.toFixed(2)),
+        high: parseFloat(high.toFixed(precision)),
+        low: parseFloat(low.toFixed(precision)),
+        volume: volStr,
+        sparkline: sparkline.map((p) => parseFloat(p.toFixed(precision))),
+        assetClass,
+        lastClose: parseFloat(prevClose.toFixed(precision)),
+      };
+    } catch {
+      // Continue to next host or fallback quietly on ECONNRESET / timeout
+      continue;
+    }
   }
+
+  return null;
 }
 
 export default async function handler(req: any, res: any) {

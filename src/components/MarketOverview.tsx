@@ -535,7 +535,7 @@ export const MarketOverview: React.FC<MarketOverviewProps> = ({
                 const isBear = item.sentiment === 'BEARISH';
                 return (
                   <div
-                    key={item.id}
+                    key={item.id ? `${item.id}-${idx}` : `sentiment-item-${idx}`}
                     className="p-2.5 rounded-lg border transition-all hover:border-blue-500/40"
                     style={{
                       backgroundColor: 'var(--bg-card-subtle)',

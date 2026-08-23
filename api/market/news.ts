@@ -251,14 +251,23 @@ async function fetchLiveRssFeeds(): Promise<SentimentArticle[]> {
           // Strip HTML tags from title
           title = title.replace(/<[^>]*>?/gm, '');
 
-          const link = item.link || item.guid || 'https://finance.yahoo.com';
+          let link = (item.link || item.guid || '').trim();
+          if (!link.startsWith('http')) {
+            link = link.startsWith('/')
+              ? `https://finance.yahoo.com${link}`
+              : link.startsWith('?')
+              ? `https://finance.yahoo.com/news/${link}`
+              : 'https://finance.yahoo.com';
+          }
+
           const { sentiment, score } = analyzeSentiment(title, item.contentSnippet || '');
           const tags = extractTags(title);
           const author = item.creator || item.author || `${publisher} Desk`;
           const timeStr = formatRelativeTime(item.isoDate || item.pubDate);
+          const randomSuffix = Math.random().toString(36).substring(2, 8);
 
           results.push({
-            id: `rss-${item.guid || item.link || Math.random().toString(36).substring(2, 9)}`,
+            id: `rss-${publisher.toLowerCase().replace(/\s+/g, '-')}-${Date.now().toString(36)}-${randomSuffix}`,
             time: timeStr,
             headline: title,
             sentiment,
@@ -272,18 +281,20 @@ async function fetchLiveRssFeeds(): Promise<SentimentArticle[]> {
         }
       }
     } catch (err) {
-      console.warn(`[RSS Parser] Could not fetch ${src.url}:`, (err as any)?.message || err);
+      // Quietly continue if an external RSS endpoint has a transient network timeout
     }
   }
 
-  // Deduplicate articles by similar headlines
+  // Deduplicate articles by similar headlines and ensure unique IDs
   const seenHeadlines = new Set<string>();
   const uniqueArticles: SentimentArticle[] = [];
 
-  for (const art of results) {
-    const norm = art.headline.toLowerCase().substring(0, 30);
+  for (let i = 0; i < results.length; i++) {
+    const art = results[i];
+    const norm = art.headline.toLowerCase().substring(0, 35);
     if (!seenHeadlines.has(norm)) {
       seenHeadlines.add(norm);
+      art.id = `rss-art-${i}-${art.source.toLowerCase().replace(/\s+/g, '')}-${Date.now()}`;
       uniqueArticles.push(art);
     }
   }
