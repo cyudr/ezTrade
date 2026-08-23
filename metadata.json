@@ -1,0 +1,6 @@
+{
+  "name": "Quant Terminal",
+  "description": "High-frequency quantitative trading terminal featuring real-time market overview, statistical research workstation, signal backtesting, strategy performance monitoring, and portfolio execution management.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
