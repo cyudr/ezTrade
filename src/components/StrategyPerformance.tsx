@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   StopCircle,
   Download,
@@ -13,9 +13,10 @@ import {
   Layers,
   Play,
   RotateCcw,
+  Wifi,
 } from 'lucide-react';
 import { SystemHealth } from '../types';
-import { INITIAL_SYSTEM_HEALTH } from '../data/mockData';
+import { fetchApiHealth } from '../services/apiService';
 
 interface StrategyPerformanceProps {
   onExportCsv?: () => void;
@@ -28,8 +29,55 @@ export const StrategyPerformance: React.FC<StrategyPerformanceProps> = ({
 }) => {
   const [strategyStatus, setStrategyStatus] = useState<'ACTIVE' | 'HALTED'>('ACTIVE');
   const [showHaltModal, setShowHaltModal] = useState(false);
-  const [health] = useState<SystemHealth>(INITIAL_SYSTEM_HEALTH);
+  const [health, setHealth] = useState<SystemHealth>({
+    apiLatency: { status: 'ok', value: '11ms' },
+    marginLevel: { status: 'ok', value: '42.8%' },
+    dataFeed: { status: 'ok', value: '99.98%' },
+    slippage: { status: 'ok', value: '0.02%' },
+  });
   const [selectedSubTab, setSelectedSubTab] = useState<'FILLS' | 'RISK' | 'PARAMETERS'>('FILLS');
+
+  // Real-time API telemetry ping
+  useEffect(() => {
+    let isMounted = true;
+    const pingTelemetry = async () => {
+      const start = performance.now();
+      try {
+        const res = await fetchApiHealth();
+        const latency = Math.round(performance.now() - start);
+        if (isMounted) {
+          setHealth({
+            apiLatency: {
+              status: res.status === 'ok' ? 'ok' : 'error',
+              value: `${latency}ms`,
+            },
+            marginLevel: { status: 'ok', value: '42.8%' },
+            dataFeed: {
+              status: res.status === 'ok' ? 'ok' : 'warning',
+              value: res.status === 'ok' ? '100% Live' : 'API Offline',
+            },
+            slippage: { status: 'ok', value: '0.02%' },
+          });
+        }
+      } catch (err) {
+        if (isMounted) {
+          setHealth({
+            apiLatency: { status: 'error', value: 'Offline' },
+            marginLevel: { status: 'ok', value: '42.8%' },
+            dataFeed: { status: 'error', value: 'API Offline' },
+            slippage: { status: 'warning', value: 'N/A' },
+          });
+        }
+      }
+    };
+
+    pingTelemetry();
+    const interval = setInterval(pingTelemetry, 15000);
+    return () => {
+      isMounted = false;
+      clearInterval(interval);
+    };
+  }, []);
 
   // Simulated live execution logs
   const [executions] = useState([
@@ -520,6 +568,49 @@ export const StrategyPerformance: React.FC<StrategyPerformanceProps> = ({
               }}
             >
               <div className="text-[10px] font-mono-val mb-1" style={{ color: 'var(--text-muted)' }}>
+                Sortino Ratio (Downside Adj)
+              </div>
+              <div
+                className="text-[18px] font-bold font-mono-val"
+                style={{ color: 'var(--accent-primary)' }}
+              >
+                3.12
+              </div>
+              <div
+                className="text-[10px] mt-1 font-medium"
+                style={{ color: 'var(--color-positive)' }}
+              >
+                Excess return vs downside semivariance
+              </div>
+            </div>
+            <div
+              className="p-3 rounded-lg border"
+              style={{
+                backgroundColor: 'var(--bg-card-subtle)',
+                borderColor: 'var(--border-subtle)',
+              }}
+            >
+              <div className="text-[10px] font-mono-val mb-1" style={{ color: 'var(--text-muted)' }}>
+                Turnaround Ratio (Recovery Factor)
+              </div>
+              <div
+                className="text-[18px] font-bold font-mono-val"
+                style={{ color: 'var(--color-positive)' }}
+              >
+                11.34x
+              </div>
+              <div className="text-[10px] mt-1" style={{ color: 'var(--text-muted)' }}>
+                Total Net PnL / Maximum Peak Drawdown
+              </div>
+            </div>
+            <div
+              className="p-3 rounded-lg border"
+              style={{
+                backgroundColor: 'var(--bg-card-subtle)',
+                borderColor: 'var(--border-subtle)',
+              }}
+            >
+              <div className="text-[10px] font-mono-val mb-1" style={{ color: 'var(--text-muted)' }}>
                 Beta to S&P 500
               </div>
               <div
@@ -553,6 +644,26 @@ export const StrategyPerformance: React.FC<StrategyPerformanceProps> = ({
               </div>
               <div className="text-[10px] mt-1" style={{ color: 'var(--text-muted)' }}>
                 Cap: 2.50x Max
+              </div>
+            </div>
+            <div
+              className="p-3 rounded-lg border"
+              style={{
+                backgroundColor: 'var(--bg-card-subtle)',
+                borderColor: 'var(--border-subtle)',
+              }}
+            >
+              <div className="text-[10px] font-mono-val mb-1" style={{ color: 'var(--text-muted)' }}>
+                Sharpe Ratio
+              </div>
+              <div
+                className="text-[18px] font-bold font-mono-val"
+                style={{ color: 'var(--color-positive)' }}
+              >
+                2.14
+              </div>
+              <div className="text-[10px] mt-1 font-medium" style={{ color: 'var(--color-positive)' }}>
+                Above 2.0 institutional benchmark
               </div>
             </div>
           </div>

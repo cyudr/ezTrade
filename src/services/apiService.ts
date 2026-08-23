@@ -178,7 +178,7 @@ export async function fetchCoinGeckoPrices(
     // Continue to direct CoinGecko attempt
   }
 
-  // Direct CoinGecko public fallback
+  // Direct CoinGecko public API
   try {
     const url = `https://api.coingecko.com/api/v3/simple/price?ids=${encodeURIComponent(ids)}&vs_currencies=${encodeURIComponent(vs)}&include_24hr_change=true&include_24hr_vol=true&include_last_updated_at=true`;
     const headers: Record<string, string> = { Accept: 'application/json' };
@@ -188,95 +188,16 @@ export async function fetchCoinGeckoPrices(
     const response = await fetch(url, { headers });
     if (response.ok) {
       const data: CoinGeckoPriceResponse = await response.json();
-      return data;
+      if (data && Object.keys(data).length > 0) {
+        return data;
+      }
     }
   } catch (e) {
     console.warn('CoinGecko direct fetch note:', e);
   }
 
-  // High-accuracy fallback
-  return {
-    bitcoin: {
-      usd: 68450.0,
-      sgd: 92133.7,
-      usd_24h_change: 2.78,
-      sgd_24h_change: 2.82,
-      usd_24h_vol: 38500000000,
-      sgd_24h_vol: 51821000000,
-    },
-    ethereum: {
-      usd: 2540.0,
-      sgd: 3418.84,
-      usd_24h_change: 3.48,
-      sgd_24h_change: 3.52,
-      usd_24h_vol: 21400000000,
-      sgd_24h_vol: 28804400000,
-    },
-    solana: {
-      usd: 168.5,
-      sgd: 226.8,
-      usd_24h_change: 5.12,
-      sgd_24h_change: 5.16,
-      usd_24h_vol: 6800000000,
-      sgd_24h_vol: 9152800000,
-    },
-    'avalanche-2': {
-      usd: 26.4,
-      sgd: 35.53,
-      usd_24h_change: 1.85,
-      sgd_24h_change: 1.89,
-      usd_24h_vol: 850000000,
-      sgd_24h_vol: 1144100000,
-    },
-    ripple: {
-      usd: 0.584,
-      sgd: 0.786,
-      usd_24h_change: -0.42,
-      sgd_24h_change: -0.38,
-      usd_24h_vol: 1200000000,
-      sgd_24h_vol: 1615200000,
-    },
-    cardano: {
-      usd: 0.362,
-      sgd: 0.487,
-      usd_24h_change: 0.95,
-      sgd_24h_change: 0.98,
-      usd_24h_vol: 450000000,
-      sgd_24h_vol: 605700000,
-    },
-    dogecoin: {
-      usd: 0.142,
-      sgd: 0.191,
-      usd_24h_change: 4.25,
-      sgd_24h_change: 4.3,
-      usd_24h_vol: 1850000000,
-      sgd_24h_vol: 2489000000,
-    },
-    binancecoin: {
-      usd: 592.4,
-      sgd: 797.37,
-      usd_24h_change: 1.45,
-      sgd_24h_change: 1.48,
-      usd_24h_vol: 980000000,
-      sgd_24h_vol: 1319080000,
-    },
-    chainlink: {
-      usd: 11.85,
-      sgd: 15.95,
-      usd_24h_change: 2.15,
-      sgd_24h_change: 2.19,
-      usd_24h_vol: 320000000,
-      sgd_24h_vol: 430720000,
-    },
-    polkadot: {
-      usd: 4.25,
-      sgd: 5.72,
-      usd_24h_change: -0.85,
-      sgd_24h_change: -0.81,
-      usd_24h_vol: 210000000,
-      sgd_24h_vol: 282660000,
-    },
-  };
+  // Strict API policy: Return empty response if live endpoints are unreachable
+  return {};
 }
 
 /**
@@ -321,7 +242,7 @@ export async function fetchLocalSignalData(
     // Continue to client-side algorithmic engine
   }
 
-  return { success: false, error: 'Local server offline/unreachable - fallback active' };
+  return { success: false, error: 'Signal Engine API Offline (No connection to live endpoint)' };
 }
 
 /**

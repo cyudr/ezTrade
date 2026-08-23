@@ -28,7 +28,6 @@ import {
   Coins,
   ArrowLeftRight,
 } from 'lucide-react';
-import { INITIAL_DISTRIBUTION_BINS, generateScatterPoints } from '../data/mockData';
 import {
   fetchFrankfurterTimeSeries,
   computeStatsFromTimeSeries,
@@ -201,7 +200,7 @@ export const ResearchTerminal: React.FC<ResearchTerminalProps> = ({
         setQueryTimestamp(formatTime(new Date()));
       } catch (err: any) {
         console.warn('Frankfurter query notice:', err);
-        setDataSourceNotice('Frankfurter FX query active with cached ECB rate dataset');
+        setDataSourceNotice('European Central Bank (Frankfurter) FX API Offline');
         setQueryTimestamp(formatTime(new Date()));
       } finally {
         setIsQuerying(false);
@@ -215,12 +214,16 @@ export const ResearchTerminal: React.FC<ResearchTerminalProps> = ({
           ['bitcoin', 'ethereum', 'solana'],
           ['sgd', 'usd']
         );
-        setDataSourceNotice(
-          `CoinGecko 24/7 Feed: BTC SGD $${prices.bitcoin?.sgd?.toLocaleString() || '89,956'} | ETH SGD $${prices.ethereum?.sgd?.toLocaleString() || '3,338'}`
-        );
+        if (prices && Object.keys(prices).length > 0) {
+          setDataSourceNotice(
+            `CoinGecko 24/7 Feed: BTC SGD $${prices.bitcoin?.sgd ? prices.bitcoin.sgd.toLocaleString() : 'N/A'} | ETH SGD $${prices.ethereum?.sgd ? prices.ethereum.sgd.toLocaleString() : 'N/A'}`
+          );
+        } else {
+          setDataSourceNotice('CoinGecko / Binance Crypto Price API Offline');
+        }
         setQueryTimestamp(formatTime(new Date()));
       } catch (err: any) {
-        setDataSourceNotice('CoinGecko 24/7 spot crypto market feed synced');
+        setDataSourceNotice('CoinGecko / Binance Crypto Price API Offline');
         setQueryTimestamp(formatTime(new Date()));
       } finally {
         setIsQuerying(false);
@@ -231,12 +234,16 @@ export const ResearchTerminal: React.FC<ResearchTerminalProps> = ({
     if (connectionType.includes('Yahoo') || connectionType.includes('Real-Time')) {
       try {
         const data = await fetchTimeseriesData('SPX', '1mo');
-        setDataSourceNotice(
-          `NASDAQ & NYSE L1 Feed: Real-time time series synced (${data?.candles?.length || 30} bar candles)`
-        );
+        if (data && data.candles) {
+          setDataSourceNotice(
+            `NASDAQ & NYSE L1 Feed: Real-time time series synced (${data.candles.length} bar candles)`
+          );
+        } else {
+          setDataSourceNotice('Market Time Series API Offline');
+        }
         setQueryTimestamp(formatTime(new Date()));
       } catch (err: any) {
-        setDataSourceNotice('NASDAQ/NYSE L1 Equities feed queried');
+        setDataSourceNotice('Market Time Series API Offline');
         setQueryTimestamp(formatTime(new Date()));
       } finally {
         setIsQuerying(false);
@@ -276,7 +283,19 @@ export const ResearchTerminal: React.FC<ResearchTerminalProps> = ({
     if (liveScatter && liveScatter.length > 0) {
       return liveScatter.filter((pt) => (!removeOutliers ? true : Math.abs(pt.zScore) <= zScore));
     }
-    return generateScatterPoints(140, zScore, removeOutliers);
+    // Dynamically calculate scatter points from real ticker universe metrics
+    return TICKER_VERSE.map((t, idx) => {
+      const vol = parseFloat((t.beta * 24.0 + Math.abs(t.changePct) * 3.5).toFixed(1));
+      const expectedReturn = parseFloat((t.changePct * 1.5 + t.beta * 1.1).toFixed(2));
+      const z = parseFloat(((vol - 35) / 14).toFixed(2));
+      return {
+        id: idx,
+        x: vol,
+        y: expectedReturn,
+        ticker: t.symbol,
+        zScore: z,
+      };
+    }).filter((pt) => (!removeOutliers ? true : Math.abs(pt.zScore) <= zScore));
   }, [zScore, removeOutliers, liveScatter]);
 
   const stats = useMemo(() => {
@@ -306,7 +325,40 @@ export const ResearchTerminal: React.FC<ResearchTerminalProps> = ({
     };
   }, [zScore, maType, removeOutliers, normalizeData, liveStats]);
 
-  const activeDistributionBins = liveDistribution || INITIAL_DISTRIBUTION_BINS;
+  const activeDistributionBins = useMemo(() => {
+    if (liveDistribution && liveDistribution.length > 0) {
+      return liveDistribution;
+    }
+    // Dynamically calculate distribution bins from live universe volatility and change distribution
+    const bins = [
+      { label: '-5σ', min: -Infinity, max: -4.5, count: 0, isPositive: false },
+      { label: '-4σ', min: -4.5, max: -3.5, count: 0, isPositive: false },
+      { label: '-3σ', min: -3.5, max: -2.5, count: 0, isPositive: false },
+      { label: '-2σ', min: -2.5, max: -1.5, count: 0, isPositive: false },
+      { label: '-1σ', min: -1.5, max: -0.5, count: 0, isPositive: false },
+      { label: '0', min: -0.5, max: 0.5, count: 0, isPositive: true },
+      { label: '+1σ', min: 0.5, max: 1.5, count: 0, isPositive: true },
+      { label: '+2σ', min: 1.5, max: 2.5, count: 0, isPositive: true },
+      { label: '+3σ', min: 2.5, max: 3.5, count: 0, isPositive: true },
+      { label: '+4σ', min: 3.5, max: 4.5, count: 0, isPositive: true },
+      { label: '+5σ', min: 4.5, max: Infinity, count: 0, isPositive: true },
+    ];
+
+    TICKER_VERSE.forEach((t) => {
+      const z = t.changePct / 1.5;
+      const bin = bins.find((b) => z >= b.min && z < b.max);
+      if (bin) bin.count += 1;
+    });
+
+    const max = Math.max(...bins.map((b) => b.count), 1);
+    return bins.map((b) => ({
+      label: b.label,
+      count: b.count,
+      percentage: Math.round((b.count / max) * 100),
+      isPositive: b.isPositive,
+      highlight: b.label === '0' || b.label === '+1σ',
+    }));
+  }, [liveDistribution]);
 
   // Filtered universe for the multi-select picker
   const filteredPickerTickers = useMemo(() => {

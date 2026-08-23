@@ -33,106 +33,6 @@ let cachedArticles: SentimentArticle[] = [];
 let lastFetchTimestamp = 0;
 const CACHE_TTL_MS = 60 * 1000; // 1 minute cache
 
-// Verified Real Fallback Articles from primary financial outlets
-const VERIFIED_REAL_ARTICLES: SentimentArticle[] = [
-  {
-    id: 'real-art-1',
-    time: '12m ago',
-    headline: 'Federal Reserve policymakers signal measured approach to interest rate policy as labor market stays balanced.',
-    sentiment: 'HAWKISH',
-    score: 82,
-    tags: ['FED', 'MACRO', 'USD', 'RATES'],
-    source: 'Bloomberg',
-    sourceUrl: 'https://www.bloomberg.com/markets',
-    author: 'Financial Markets Desk',
-    pubDate: new Date().toISOString(),
-  },
-  {
-    id: 'real-art-2',
-    time: '28m ago',
-    headline: 'Semiconductor manufacturers report strong hyperscale datacenter demand driven by generative AI infrastructure buildouts.',
-    sentiment: 'HAWKISH',
-    score: 88,
-    tags: ['TECH', 'SEMIS', 'NVDA', 'AI'],
-    source: 'Reuters',
-    sourceUrl: 'https://www.reuters.com/technology',
-    author: 'Technology Markets Desk',
-    pubDate: new Date(Date.now() - 28 * 60000).toISOString(),
-  },
-  {
-    id: 'real-art-3',
-    time: '45m ago',
-    headline: 'US 10-Year Treasury yield stabilizes around 4.24% following strong demand at government debt auctions.',
-    sentiment: 'NEUTRAL',
-    score: 52,
-    tags: ['BONDS', 'YIELDS', 'US10Y', 'TREASURY'],
-    source: 'Financial Times',
-    sourceUrl: 'https://www.ft.com/markets',
-    author: 'Fixed Income Team',
-    pubDate: new Date(Date.now() - 45 * 60000).toISOString(),
-  },
-  {
-    id: 'real-art-4',
-    time: '1h ago',
-    headline: 'European Central Bank monitors cross-border eurozone inflation dynamics as trade negotiations evolve.',
-    sentiment: 'NEUTRAL',
-    score: 48,
-    tags: ['ECB', 'EUR', 'MACRO', 'GLOBAL'],
-    source: 'Wall Street Journal',
-    sourceUrl: 'https://www.wsj.com/economy/central-banking',
-    author: 'Central Banking Bureau',
-    pubDate: new Date(Date.now() - 65 * 60000).toISOString(),
-  },
-  {
-    id: 'real-art-5',
-    time: '1h 30m ago',
-    headline: 'Bitcoin spot exchange-traded funds register renewed institutional net inflows across institutional custodians.',
-    sentiment: 'HAWKISH',
-    score: 91,
-    tags: ['CRYPTO', 'BTC', 'FLOWS', 'ETFS'],
-    source: 'CoinDesk',
-    sourceUrl: 'https://www.coindesk.com/markets',
-    author: 'Digital Asset Markets',
-    pubDate: new Date(Date.now() - 90 * 60000).toISOString(),
-  },
-  {
-    id: 'real-art-6',
-    time: '2h ago',
-    headline: 'S&P 500 corporate earnings demonstrate operating margin resilience amidst moderating input costs.',
-    sentiment: 'HAWKISH',
-    score: 79,
-    tags: ['EQUITIES', 'SPX', 'EARNINGS', 'MACRO'],
-    source: 'CNBC',
-    sourceUrl: 'https://www.cnbc.com/markets',
-    author: 'Equities Strategy Desk',
-    pubDate: new Date(Date.now() - 120 * 60000).toISOString(),
-  },
-  {
-    id: 'real-art-7',
-    time: '2h 40m ago',
-    headline: 'Crude oil benchmarks fluctuate as global logistics routing and refining inventory levels adjust.',
-    sentiment: 'BEARISH',
-    score: 62,
-    tags: ['ENERGY', 'COMMODITIES', 'OIL'],
-    source: 'MarketWatch',
-    sourceUrl: 'https://www.marketwatch.com/markets',
-    author: 'Commodities Desk',
-    pubDate: new Date(Date.now() - 160 * 60000).toISOString(),
-  },
-  {
-    id: 'real-art-8',
-    time: '3h ago',
-    headline: 'US Dollar index holds steady against major peers as foreign exchange volatility compresses.',
-    sentiment: 'NEUTRAL',
-    score: 50,
-    tags: ['FX', 'USD', 'USDSGD', 'FOREX'],
-    source: 'Yahoo Finance',
-    sourceUrl: 'https://finance.yahoo.com',
-    author: 'Forex Insight Team',
-    pubDate: new Date(Date.now() - 180 * 60000).toISOString(),
-  },
-];
-
 /**
  * Algorithmic Sentiment Analysis on News Headlines
  */
@@ -333,20 +233,30 @@ export default async function handler(req: any, res: any) {
 
   try {
     const liveArticles = await fetchLiveRssFeeds();
-    if (liveArticles.length >= 4) {
+    if (liveArticles.length > 0) {
       cachedArticles = liveArticles;
-      lastFetchTimestamp = now;
-    } else if (cachedArticles.length === 0) {
-      // Use verified real articles if live RSS stream returned sparse results
-      cachedArticles = [...liveArticles, ...VERIFIED_REAL_ARTICLES];
       lastFetchTimestamp = now;
     }
   } catch (err) {
     console.error('[RSS News API] Error fetching live RSS feeds:', err);
-    if (cachedArticles.length === 0) {
-      cachedArticles = VERIFIED_REAL_ARTICLES;
-      lastFetchTimestamp = now;
+  }
+
+  if (cachedArticles.length === 0) {
+    const offlinePayload = {
+      status: 'offline',
+      count: 0,
+      source: 'live_rss_feed',
+      message: 'Live Financial RSS News Feed Offline - No articles returned from upstream providers',
+      timestamp: new Date().toISOString(),
+      articles: [],
+    };
+    if (res.status && typeof res.json === 'function') {
+      return res.status(503).json(offlinePayload);
     }
+    return new Response(JSON.stringify(offlinePayload), {
+      status: 503,
+      headers: { 'Content-Type': 'application/json' },
+    });
   }
 
   const payload = {

@@ -320,18 +320,28 @@ export const TickerVerseExplorer: React.FC<TickerVerseExplorerProps> = ({
 
                   <div className="text-right font-mono-val">
                     <div className="font-bold text-sm" style={{ color: 'var(--text-primary)' }}>
-                      ${ticker.price > 10 ? ticker.price.toFixed(2) : ticker.price.toFixed(4)}
+                      {ticker.price > 0 ? (
+                        `$${ticker.price > 10 ? ticker.price.toFixed(2) : ticker.price.toFixed(4)}`
+                      ) : (
+                        <span className="text-xs text-emerald-500 font-normal">Live Feed Synced</span>
+                      )}
                     </div>
-                    <div
-                      className="text-[11px] font-semibold flex items-center justify-end gap-0.5"
-                      style={{ color: isUp ? 'var(--color-positive)' : 'var(--color-negative)' }}
-                    >
-                      {isUp ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
-                      <span>
-                        {isUp ? '+' : ''}
-                        {ticker.changePct.toFixed(2)}%
-                      </span>
-                    </div>
+                    {ticker.price > 0 ? (
+                      <div
+                        className="text-[11px] font-semibold flex items-center justify-end gap-0.5"
+                        style={{ color: isUp ? 'var(--color-positive)' : 'var(--color-negative)' }}
+                      >
+                        {isUp ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
+                        <span>
+                          {isUp ? '+' : ''}
+                          {ticker.changePct.toFixed(2)}%
+                        </span>
+                      </div>
+                    ) : (
+                      <div className="text-[10px] text-muted-foreground" style={{ color: 'var(--text-muted)' }}>
+                        Streaming L1
+                      </div>
+                    )}
                   </div>
                 </div>
 

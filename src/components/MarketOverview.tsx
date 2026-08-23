@@ -15,9 +15,10 @@ import {
   BarChart2,
   BookOpen,
   X,
+  ShieldAlert,
+  Wifi,
 } from 'lucide-react';
 import { TickerItem, SentimentItem } from '../types';
-import { CORRELATION_MATRICES } from '../data/mockData';
 import { getUniverseTicker, searchTickerVerse, UniverseTicker } from '../data/tickerVerse';
 import { getMarketSessionForSymbol } from '../utils/marketHours';
 import { getTickerApiStatus } from '../utils/tickerApiStatus';
@@ -110,7 +111,61 @@ export const MarketOverview: React.FC<MarketOverviewProps> = ({
           { item: nvda, label: 'NVIDIA (Post-Split)' },
         ];
 
-  const correlationData = CORRELATION_MATRICES[selectedPeriod];
+  // Compute correlation matrix dynamically from live ticker returns & sparklines
+  const correlationData = useMemo(() => {
+    const assets = ['SPX', 'NDX', 'US10Y', 'GLD', 'BTC'];
+    const matrix: number[][] = [];
+
+    // Helper to calculate Pearson correlation coefficient
+    const calcPearson = (arrA: number[], arrB: number[]): number => {
+      const n = Math.min(arrA.length, arrB.length);
+      if (n < 2) return 0.5;
+      const meanA = arrA.slice(0, n).reduce((s, x) => s + x, 0) / n;
+      const meanB = arrB.slice(0, n).reduce((s, x) => s + x, 0) / n;
+      let num = 0;
+      let denA = 0;
+      let denB = 0;
+      for (let i = 0; i < n; i++) {
+        const diffA = arrA[i] - meanA;
+        const diffB = arrB[i] - meanB;
+        num += diffA * diffB;
+        denA += diffA * diffA;
+        denB += diffB * diffB;
+      }
+      const den = Math.sqrt(denA * denB);
+      if (den === 0) return 0;
+      return parseFloat((num / den).toFixed(2));
+    };
+
+    // Extract series from live tickers
+    const assetSeriesMap: Record<string, number[]> = {};
+    assets.forEach((sym) => {
+      const match = tickers.find((t) => t.symbol === sym || (sym === 'BTC' && t.symbol === 'BTCUSD'));
+      if (match && match.sparkline && match.sparkline.length >= 2) {
+        assetSeriesMap[sym] = match.sparkline;
+      } else {
+        // Fallback to price and change ratio
+        const base = match?.price || 100;
+        const chg = match?.changePct || 0;
+        assetSeriesMap[sym] = [base * (1 - chg / 100), base * (1 - chg / 200), base];
+      }
+    });
+
+    for (let i = 0; i < assets.length; i++) {
+      const row: number[] = [];
+      for (let j = 0; j < assets.length; j++) {
+        if (i === j) {
+          row.push(1.0);
+        } else {
+          const corr = calcPearson(assetSeriesMap[assets[i]], assetSeriesMap[assets[j]]);
+          row.push(corr);
+        }
+      }
+      matrix.push(row);
+    }
+
+    return { assets, matrix };
+  }, [tickers, selectedPeriod]);
 
   const filteredSentiment = sentimentFeed.filter((item) => {
     if (activeSentimentFilter === 'ALL') return true;
@@ -676,7 +731,24 @@ export const MarketOverview: React.FC<MarketOverviewProps> = ({
 
             {/* Feed Items Container */}
             <div className="flex-1 overflow-y-auto pr-1 space-y-2 custom-scrollbar max-h-[480px]">
-              {filteredSentiment.map((item, idx) => {
+              {filteredSentiment.length === 0 ? (
+                <div
+                  className="p-6 rounded-lg border text-center flex flex-col items-center justify-center gap-2 my-auto"
+                  style={{
+                    backgroundColor: 'var(--bg-card-subtle)',
+                    borderColor: 'var(--border-subtle)',
+                  }}
+                >
+                  <ShieldAlert className="w-6 h-6 text-amber-500 opacity-80" />
+                  <span className="font-mono-val text-xs font-bold uppercase tracking-wider text-amber-500">
+                    Live News API Offline
+                  </span>
+                  <p className="text-[11px] text-muted max-w-[240px]">
+                    No live articles received from upstream financial RSS feeds. Awaiting live connection.
+                  </p>
+                </div>
+              ) : (
+                filteredSentiment.map((item, idx) => {
                 const isHawk = item.sentiment === 'HAWKISH';
                 const isBear = item.sentiment === 'BEARISH';
                 return (
@@ -770,7 +842,7 @@ export const MarketOverview: React.FC<MarketOverviewProps> = ({
                     </div>
                   </div>
                 );
-              })}
+              }))}
             </div>
           </div>
         </div>

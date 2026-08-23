@@ -23,15 +23,16 @@ export default async function handler(req: any, res: any) {
     const apiRes = await fetch(url);
     if (apiRes.ok) {
       const data = await apiRes.json();
+      const payload = {
+        status: 'ok',
+        source: 'ecb-frankfurter-live',
+        serverTime: new Date().toISOString(),
+        ...data,
+      };
       if (res.status && typeof res.json === 'function') {
-        return res.status(200).json({
-          status: 'ok',
-          source: 'ecb-frankfurter-live',
-          serverTime: new Date().toISOString(),
-          ...data,
-        });
+        return res.status(200).json(payload);
       }
-      return new Response(JSON.stringify(data), {
+      return new Response(JSON.stringify(payload), {
         status: 200,
         headers: { 'Content-Type': 'application/json' },
       });
@@ -40,31 +41,21 @@ export default async function handler(req: any, res: any) {
     console.warn('Market latest fetch error:', e?.message);
   }
 
-  // Fallback FX data
-  const fallback = {
-    status: 'ok',
-    source: 'cached-fallback',
-    amount: 1.0,
-    base: base,
-    date: new Date().toISOString().split('T')[0],
+  // Strict API Policy: When live data is not available, return API Offline error (No mock/hardcoded fallbacks)
+  const offlinePayload = {
+    status: 'offline',
+    error: 'European Central Bank (Frankfurter) FX API Offline',
     serverTime: new Date().toISOString(),
-    rates: {
-      USD: 0.7434,
-      EUR: 0.6858,
-      JPY: 115.42,
-      GBP: 0.5892,
-      AUD: 1.1345,
-      CHF: 0.6582,
-      CNY: 5.3821,
-    },
+    base,
+    rates: {},
   };
 
   if (res.status && typeof res.json === 'function') {
-    return res.status(200).json(fallback);
+    return res.status(503).json(offlinePayload);
   }
 
-  return new Response(JSON.stringify(fallback), {
-    status: 200,
+  return new Response(JSON.stringify(offlinePayload), {
+    status: 503,
     headers: { 'Content-Type': 'application/json' },
   });
 }

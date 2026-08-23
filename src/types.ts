@@ -83,9 +83,10 @@ export interface PerformanceSummary {
   maxDrawdown: number;
   winRate: number;
   sharpeRatio: number;
+  sortinoRatio: number;
+  turnaroundRatio: number; // Recovery Factor: Total Return / |Max Drawdown|
   totalTrades: number;
   profitFactor?: number;
-  sortinoRatio?: number;
   alpha?: number;
   beta?: number;
 }
@@ -131,6 +132,47 @@ export interface ApiConfig {
   lastFxSync?: string;
   lastCryptoSync?: string;
   lastSignalSync?: string;
+}
+
+export interface LiveRatesResponse {
+  amount?: number;
+  base: string;
+  date?: string;
+  rates: Record<string, number>;
+  status?: string;
+  source?: string;
+  serverTime?: string;
+}
+
+export interface TimeseriesResponse {
+  amount?: number;
+  base: string;
+  start_date: string;
+  end_date: string;
+  rates: Record<string, Record<string, number>>;
+  status?: string;
+}
+
+export interface TimeseriesSummaryStats {
+  mean: number | string;
+  stdDev: number | string;
+  zScore: number | string;
+  kurtosis: number | string;
+  skewness: number | string;
+  correlation?: number | string;
+  dataPointsCount?: number;
+  observations?: string;
+  rSquared?: string;
+  beta?: string;
+  pValue?: string;
+  startDate?: string;
+  endDate?: string;
+}
+
+export interface TimeseriesPoint {
+  date: string;
+  value: number;
+  symbol: string;
 }
 
 export interface TerminalNotification {

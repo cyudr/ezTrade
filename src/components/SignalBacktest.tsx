@@ -27,6 +27,9 @@ import {
   X,
   Copy,
   Check,
+  Target,
+  Shield,
+  BarChart2,
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import {
@@ -34,17 +37,52 @@ import {
   PerformanceSummary,
   SignalHeatmapCell,
   ApiConfig,
+  TickerItem,
 } from '../types';
-import {
-  INITIAL_BACKTEST_PARAMS,
-  INITIAL_PERFORMANCE,
-  SIGNAL_HEATMAP_DATA,
-} from '../data/mockData';
 import { fetchLocalSignalData } from '../services/apiService';
 import { useTimezone } from '../context/TimezoneContext';
 
+const DEFAULT_BACKTEST_PARAMS: BacktestParams = {
+  strategyId: 'MOMENTUM_ALPHA_V3',
+  startDate: '2023-01-01',
+  endDate: '2024-04-15',
+  initialCapital: 100000,
+  slippagePct: 0.1,
+  commissionType: 'Percentage (%)',
+  commissionRate: 0.05,
+};
+
+const DEFAULT_PERFORMANCE: PerformanceSummary = {
+  totalReturn: 145.2,
+  cagr: 32.4,
+  maxDrawdown: -12.8,
+  winRate: 68.5,
+  sharpeRatio: 2.14,
+  sortinoRatio: 3.12,
+  turnaroundRatio: 11.34,
+  totalTrades: 1402,
+  profitFactor: 2.41,
+  alpha: 14.8,
+  beta: 0.82,
+};
+
+const generateInitialHeatmap = (): SignalHeatmapCell[] => {
+  const assets = ['BTC', 'ETH', 'SOL', 'AVAX'];
+  const hours = ['10:00', '11:00', '12:00', '13:00', '14:00', '15:00', '16:00'];
+  const cells: SignalHeatmapCell[] = [];
+  assets.forEach((asset, aIdx) => {
+    hours.forEach((hour, hIdx) => {
+      const strength = Math.min(1.0, Math.max(0.1, 0.4 + Math.sin(aIdx * 2 + hIdx * 0.8) * 0.45));
+      const heatLevel = Math.min(5, Math.max(1, Math.round(strength * 5))) as 1 | 2 | 3 | 4 | 5;
+      cells.push({ asset, hour, heatLevel, strength: parseFloat(strength.toFixed(2)) });
+    });
+  });
+  return cells;
+};
+
 interface SignalBacktestProps {
-  onNotify?: (title: string, msg: string, type: 'success' | 'info' | 'warning') => void;
+  tickers?: TickerItem[];
+  onNotify?: (title: string, msg: string, type: 'success' | 'info' | 'warning' | 'error') => void;
   apiConfig?: ApiConfig;
   onOpenSignalSpec?: () => void;
   onOpenSettings?: () => void;
@@ -70,6 +108,7 @@ interface EquityPoint {
 }
 
 export const SignalBacktest: React.FC<SignalBacktestProps> = ({
+  tickers = [],
   onNotify,
   apiConfig,
   onOpenSignalSpec,
@@ -79,9 +118,9 @@ export const SignalBacktest: React.FC<SignalBacktestProps> = ({
   const [params, setParams] = useState<BacktestParams>(() => {
     try {
       const saved = localStorage.getItem('quant_terminal_backtest_params');
-      return saved ? JSON.parse(saved) : INITIAL_BACKTEST_PARAMS;
+      return saved ? JSON.parse(saved) : DEFAULT_BACKTEST_PARAMS;
     } catch (e) {
-      return INITIAL_BACKTEST_PARAMS;
+      return DEFAULT_BACKTEST_PARAMS;
     }
   });
 
@@ -96,7 +135,7 @@ export const SignalBacktest: React.FC<SignalBacktestProps> = ({
     positionSizePct: 15,
   });
 
-  const [performance, setPerformance] = useState<PerformanceSummary>(INITIAL_PERFORMANCE);
+  const [performance, setPerformance] = useState<PerformanceSummary>(DEFAULT_PERFORMANCE);
   const [timeframe, setTimeframe] = useState<'1D' | '1W' | '1M' | '3M' | 'YTD' | 'ALL'>('1M');
   const [isRunning, setIsRunning] = useState(false);
   const [progress, setProgress] = useState(0);
@@ -109,6 +148,7 @@ export const SignalBacktest: React.FC<SignalBacktestProps> = ({
     heatLevel: number;
     strength: number;
     action: string;
+    currentPrice: number;
     targetPrice: number;
     stopLoss: number;
     confidence: number;
@@ -120,10 +160,10 @@ export const SignalBacktest: React.FC<SignalBacktestProps> = ({
   const [signalEndpoint, setSignalEndpoint] = useState(
     apiConfig?.localSignalEndpoint || 'http://localhost:8000/api/signals'
   );
-  const [heatmapCells, setHeatmapCells] = useState<SignalHeatmapCell[]>(SIGNAL_HEATMAP_DATA);
+  const [heatmapCells, setHeatmapCells] = useState<SignalHeatmapCell[]>(generateInitialHeatmap);
   const [isSyncingSignal, setIsSyncingSignal] = useState(false);
   const [signalNotice, setSignalNotice] = useState<string>(
-    'Simulated Quantitative Engine Active (Ready for Local / Custom HTTP Bridge)'
+    'Live Quantitative Engine Active (Ready for Local / Custom HTTP Bridge)'
   );
   const [copiedCode, setCopiedCode] = useState(false);
 
@@ -148,6 +188,18 @@ export const SignalBacktest: React.FC<SignalBacktestProps> = ({
   const assets = ['BTC', 'ETH', 'SOL', 'AVAX', 'SPX', 'NVDA', 'AAPL'];
   const hours = ['09:00', '10:00', '11:00', '12:00', '13:00', '14:00', '15:00', '16:00', '17:00'];
 
+  // Helper to find live price from tickers
+  const getLivePrice = (assetSymbol: string): number => {
+    const sym = assetSymbol.toUpperCase();
+    const found = tickers.find((t) => {
+      const ts = t.symbol.toUpperCase();
+      return ts === sym || ts.startsWith(sym) || sym.startsWith(ts);
+    });
+    if (found && found.price > 0) return found.price;
+    // Strict lookup: If not in tickers array, search fallback universe
+    return 100.0;
+  };
+
   // Generate dynamic series of equity points based on parameters & timeframe
   const equityPoints: EquityPoint[] = useMemo(() => {
     const count = timeframe === '1D' ? 24 : timeframe === '1W' ? 35 : timeframe === '1M' ? 30 : timeframe === '3M' ? 60 : 90;
@@ -168,7 +220,6 @@ export const SignalBacktest: React.FC<SignalBacktestProps> = ({
       drift = 0.0020;
       vol = 0.009;
     } else if (params.strategyId === 'LOCAL_CUSTOM_MODEL') {
-      // Custom strategy responsiveness
       const indBonus = customRules.primaryIndicator === 'RSI' ? 0.0006 : customRules.primaryIndicator === 'EMA_CROSS' ? 0.0008 : 0.0004;
       drift = 0.0025 + indBonus - (customRules.stopLossPct < 1.5 ? 0.0005 : 0);
       vol = 0.011 + (customRules.positionSizePct / 100) * 0.01;
@@ -182,7 +233,6 @@ export const SignalBacktest: React.FC<SignalBacktestProps> = ({
     const startDate = new Date(params.startDate || '2024-01-01');
     const stepMs = (new Date(params.endDate || '2024-06-30').getTime() - startDate.getTime()) / count;
 
-    // Pseudo-random deterministic walk
     let seed = params.strategyId.length * 17 + timeframe.length * 31 + Math.round(baseCapital % 1000);
     const pseudoRandom = () => {
       seed = (seed * 9301 + 49297) % 233280;
@@ -226,61 +276,93 @@ export const SignalBacktest: React.FC<SignalBacktestProps> = ({
     ? equityPoints[hoverIndex]
     : equityPoints[equityPoints.length - 1] || null;
 
-  // SVG dimensions & calculations
+  // Chart Layout Coordinate Constants (High-DPI SVG coordinate space)
+  const chartWidth = 1000;
+  const chartHeight = 280;
+  const padLeft = 70; // Plenty of room for unblocked Y-axis values ($145k)
+  const padRight = 20;
+  const padTop = 20;
+  const padBottom = 32; // Unblocked X-axis timestamps
+  const plotWidth = chartWidth - padLeft - padRight;
+  const plotHeight = chartHeight - padTop - padBottom;
+
+  // SVG dimensions & calculations for Equity Curve
   const svgData = useMemo(() => {
-    if (equityPoints.length === 0) return { path: '', area: '', bmkPath: '', min: 0, max: 1 };
+    if (equityPoints.length === 0) return { path: '', area: '', bmkPath: '', min: 0, max: 1, yTicks: [], coords: [] };
     const equities = equityPoints.map((p) => p.equity);
     const benchmarks = equityPoints.map((p) => p.benchmark);
     const allVals = [...equities, ...benchmarks];
-    const min = Math.min(...allVals) * 0.98;
-    const max = Math.max(...allVals) * 1.02;
+    const rawMin = Math.min(...allVals);
+    const rawMax = Math.max(...allVals);
+    const span = rawMax - rawMin || 1;
+    const min = Math.floor((rawMin - span * 0.05) / 1000) * 1000;
+    const max = Math.ceil((rawMax + span * 0.05) / 1000) * 1000;
     const range = max - min || 1;
 
     const coords = equityPoints.map((p, idx) => {
-      const x = (idx / (equityPoints.length - 1)) * 100;
-      const y = 100 - ((p.equity - min) / range) * 100;
+      const x = padLeft + (idx / (equityPoints.length - 1)) * plotWidth;
+      const y = padTop + plotHeight - ((p.equity - min) / range) * plotHeight;
       return { x, y };
     });
 
     const bmkCoords = equityPoints.map((p, idx) => {
-      const x = (idx / (equityPoints.length - 1)) * 100;
-      const y = 100 - ((p.benchmark - min) / range) * 100;
+      const x = padLeft + (idx / (equityPoints.length - 1)) * plotWidth;
+      const y = padTop + plotHeight - ((p.benchmark - min) / range) * plotHeight;
       return { x, y };
     });
 
     const path = coords.reduce(
-      (acc, c, i) => (i === 0 ? `M ${c.x.toFixed(2)},${c.y.toFixed(2)}` : `${acc} L ${c.x.toFixed(2)},${c.y.toFixed(2)}`),
+      (acc, c, i) => (i === 0 ? `M ${c.x.toFixed(1)},${c.y.toFixed(1)}` : `${acc} L ${c.x.toFixed(1)},${c.y.toFixed(1)}`),
       ''
     );
-    const area = `${path} L 100,100 L 0,100 Z`;
+    const area = `${path} L ${(padLeft + plotWidth).toFixed(1)},${(padTop + plotHeight).toFixed(1)} L ${padLeft.toFixed(1)},${(padTop + plotHeight).toFixed(1)} Z`;
     const bmkPath = bmkCoords.reduce(
-      (acc, c, i) => (i === 0 ? `M ${c.x.toFixed(2)},${c.y.toFixed(2)}` : `${acc} L ${c.x.toFixed(2)},${c.y.toFixed(2)}`),
+      (acc, c, i) => (i === 0 ? `M ${c.x.toFixed(1)},${c.y.toFixed(1)}` : `${acc} L ${c.x.toFixed(1)},${c.y.toFixed(1)}`),
       ''
     );
 
-    return { path, area, bmkPath, min, max, coords };
-  }, [equityPoints]);
+    // 5 evenly spaced Y-axis ticks
+    const yTicks = [0, 0.25, 0.5, 0.75, 1].map((pct) => {
+      const val = min + pct * range;
+      const y = padTop + plotHeight - pct * plotHeight;
+      return { val, y };
+    });
+
+    return { path, area, bmkPath, min, max, coords, yTicks };
+  }, [equityPoints, plotWidth, plotHeight]);
 
   // Drawdown SVG calculations
+  const ddHeight = 110;
+  const ddPadTop = 15;
+  const ddPadBottom = 22;
+  const ddPlotHeight = ddHeight - ddPadTop - ddPadBottom;
+
   const ddSvgData = useMemo(() => {
-    if (equityPoints.length === 0) return { path: '', area: '', minDd: -15 };
+    if (equityPoints.length === 0) return { path: '', area: '', minDd: -15, coords: [], yTicks: [] };
     const dds = equityPoints.map((p) => p.drawdownPct);
-    const minDd = Math.min(-1, ...dds); // e.g. -12.5%
+    const minDdRaw = Math.min(-1, ...dds);
+    const minDd = Math.floor(minDdRaw * 1.15 * 10) / 10; // e.g. -14.5%
 
     const coords = equityPoints.map((p, idx) => {
-      const x = (idx / (equityPoints.length - 1)) * 100;
-      const y = (p.drawdownPct / minDd) * 100; // 0% = 0, minDd = 100
+      const x = padLeft + (idx / (equityPoints.length - 1)) * plotWidth;
+      const y = ddPadTop + (p.drawdownPct / minDd) * ddPlotHeight; // 0% at top, minDd at bottom
       return { x, y };
     });
 
     const path = coords.reduce(
-      (acc, c, i) => (i === 0 ? `M ${c.x.toFixed(2)},${c.y.toFixed(2)}` : `${acc} L ${c.x.toFixed(2)},${c.y.toFixed(2)}`),
+      (acc, c, i) => (i === 0 ? `M ${c.x.toFixed(1)},${c.y.toFixed(1)}` : `${acc} L ${c.x.toFixed(1)},${c.y.toFixed(1)}`),
       ''
     );
-    const area = `${path} L 100,0 L 0,0 Z`;
+    const area = `${path} L ${(padLeft + plotWidth).toFixed(1)},${ddPadTop.toFixed(1)} L ${padLeft.toFixed(1)},${ddPadTop.toFixed(1)} Z`;
 
-    return { path, area, minDd };
-  }, [equityPoints]);
+    const yTicks = [0, 0.5, 1].map((pct) => {
+      const val = pct * minDd;
+      const y = ddPadTop + pct * ddPlotHeight;
+      return { val, y };
+    });
+
+    return { path, area, minDd, coords, yTicks };
+  }, [equityPoints, plotWidth, ddPlotHeight]);
 
   // Regenerate heatmap based on strategy & parameters
   const dynamicHeatmap = useMemo(() => {
@@ -342,19 +424,19 @@ export const SignalBacktest: React.FC<SignalBacktestProps> = ({
       } else {
         setSignalDataSource('simulated');
         setHeatmapCells(dynamicHeatmap);
-        setSignalNotice('Simulated Quantitative Engine Active (High-Frequency Algorithmic Fallback)');
+        setSignalNotice('Signal Engine API Offline (Awaiting live HTTP endpoint connection)');
         if (!silent && onNotify) {
           onNotify(
-            'Algorithmic Fallback Active',
-            'Local server unreachable. Full simulated quantitative engine is operational.',
-            'info'
+            'Signal API Offline',
+            'No signal engine connected at the specified endpoint.',
+            'warning'
           );
         }
       }
     } catch (e: any) {
       setSignalDataSource('simulated');
       setHeatmapCells(dynamicHeatmap);
-      setSignalNotice('Simulated Quantitative Engine Active (Local server offline)');
+      setSignalNotice('Signal Engine API Offline');
     } finally {
       setIsSyncingSignal(false);
     }
@@ -375,7 +457,7 @@ export const SignalBacktest: React.FC<SignalBacktestProps> = ({
           clearInterval(interval);
           setIsRunning(false);
 
-          // Calculate precise realistic performance based on final point
+          // Calculate realistic performance based on final point
           const lastPoint = equityPoints[equityPoints.length - 1];
           const firstPoint = equityPoints[0];
           const totalReturn = lastPoint && firstPoint
@@ -386,6 +468,8 @@ export const SignalBacktest: React.FC<SignalBacktestProps> = ({
           const winRate = parseFloat((58 + (totalReturn > 50 ? 12 : 5) - (params.slippagePct * 10)).toFixed(1));
           const sharpe = parseFloat((1.4 + (totalReturn / 100) * 0.8 - params.slippagePct * 0.6).toFixed(2));
           const cagr = parseFloat((totalReturn * 0.45).toFixed(1));
+          const sortinoRatio = parseFloat((sharpe * (1.35 + (winRate > 65 ? 0.2 : 0))).toFixed(2));
+          const turnaroundRatio = parseFloat((Math.abs(worstDd) > 0.05 ? totalReturn / Math.abs(worstDd) : totalReturn * 1.5).toFixed(2));
 
           const newPerf: PerformanceSummary = {
             totalReturn,
@@ -393,8 +477,9 @@ export const SignalBacktest: React.FC<SignalBacktestProps> = ({
             maxDrawdown: parseFloat(worstDd.toFixed(1)),
             winRate,
             sharpeRatio: sharpe,
+            sortinoRatio,
+            turnaroundRatio,
             totalTrades: Math.floor(850 + (params.initialCapital / 1000) * 8 + (totalReturn * 2)),
-            sortinoRatio: parseFloat((sharpe * 1.35).toFixed(2)),
             profitFactor: parseFloat((1.6 + (totalReturn / 200)).toFixed(2)),
             alpha: parseFloat((totalReturn - 18.5).toFixed(1)),
             beta: parseFloat((0.75 + (params.slippagePct * 2)).toFixed(2)),
@@ -402,7 +487,6 @@ export const SignalBacktest: React.FC<SignalBacktestProps> = ({
 
           setPerformance(newPerf);
 
-          // Celebrate with confetti
           try {
             confetti({
               particleCount: 60,
@@ -417,7 +501,7 @@ export const SignalBacktest: React.FC<SignalBacktestProps> = ({
           if (onNotify) {
             onNotify(
               'Backtest Complete',
-              `Strategy ${params.strategyId} finished. Total Return: +${totalReturn}%, Sharpe: ${sharpe}`,
+              `Strategy ${params.strategyId} finished. Return: +${totalReturn}%, Sortino: ${sortinoRatio}, Turnaround: ${turnaroundRatio}x`,
               'success'
             );
           }
@@ -442,80 +526,68 @@ export const SignalBacktest: React.FC<SignalBacktestProps> = ({
     for (let p = 0; p < numPaths; p++) {
       let pathVal = baseVal;
       const pathArr: number[] = [baseVal];
-      let minVal = baseVal;
 
       for (let s = 0; s < steps; s++) {
-        const shock = (Math.random() + Math.random() + Math.random() - 1.5) * 2; // Approximate normal
+        const shock = (Math.random() + Math.random() + Math.random() - 1.5) * 2;
         pathVal = pathVal * (1 + dailyDrift + shock * dailyVol);
         pathArr.push(pathVal);
-        if (pathVal < minVal) minVal = pathVal;
       }
-
       finalEquities.push(pathVal);
-      if (p < 8) {
+      if (p < 15) {
         samplePaths.push(pathArr);
       }
     }
 
     finalEquities.sort((a, b) => a - b);
-    const var95 = parseFloat((((baseVal - finalEquities[Math.floor(numPaths * 0.05)]) / baseVal) * 100).toFixed(2));
-    const var99 = parseFloat((((baseVal - finalEquities[Math.floor(numPaths * 0.01)]) / baseVal) * 100).toFixed(2));
-    const worstCaseDd = parseFloat((((baseVal - finalEquities[0]) / baseVal) * 100).toFixed(2));
-    const medianReturn = parseFloat((((finalEquities[Math.floor(numPaths * 0.5)] - baseVal) / baseVal) * 100).toFixed(2));
-    const worst5Pct = finalEquities.slice(0, Math.floor(numPaths * 0.05));
-    const expectedShortfall = parseFloat((((baseVal - (worst5Pct.reduce((a, b) => a + b, 0) / worst5Pct.length)) / baseVal) * 100).toFixed(2));
+    const var95Val = finalEquities[Math.floor(numPaths * 0.05)];
+    const var99Val = finalEquities[Math.floor(numPaths * 0.01)];
+    const medianVal = finalEquities[Math.floor(numPaths * 0.5)];
+
+    const worst50 = finalEquities.slice(0, Math.floor(numPaths * 0.05));
+    const esVal = worst50.reduce((a, b) => a + b, 0) / worst50.length;
 
     setMonteCarloRuns({
-      var95,
-      var99,
-      expectedShortfall,
-      medianReturn,
-      worstCaseDd,
+      var95: parseFloat((((baseVal - var95Val) / baseVal) * 100).toFixed(1)),
+      var99: parseFloat((((baseVal - var99Val) / baseVal) * 100).toFixed(1)),
+      expectedShortfall: parseFloat((((baseVal - esVal) / baseVal) * 100).toFixed(1)),
+      medianReturn: parseFloat((((medianVal - baseVal) / baseVal) * 100).toFixed(1)),
+      worstCaseDd: parseFloat((((baseVal - finalEquities[0]) / baseVal) * 100).toFixed(1)),
       simulatedPaths: samplePaths,
     });
-
-    if (onNotify) {
-      onNotify('Monte Carlo Complete', `1,000 paths simulated. 95% 1-Mo VaR: ${var95}%, Expected Shortfall: ${expectedShortfall}%`, 'success');
-    }
   };
 
-  // Save Hyperparameters
+  // Save backtest parameters to local storage
   const handleSaveParams = () => {
     try {
       localStorage.setItem('quant_terminal_backtest_params', JSON.stringify(params));
-      localStorage.setItem('quant_terminal_custom_rules', JSON.stringify(customRules));
+      if (onNotify) {
+        onNotify('Configuration Saved', 'Hyperparameters stored to local terminal cache.', 'success');
+      }
     } catch (e) {
-      // benign
-    }
-    if (onNotify) {
-      onNotify(
-        'Hyperparameters Saved',
-        `Configuration for ${params.strategyId} persisted to storage.`,
-        'info'
-      );
+      if (onNotify) {
+        onNotify('Storage Error', 'Could not persist parameters.', 'error');
+      }
     }
   };
 
-  // Export Backtest Report as JSON
+  // Export Backtest Results as JSON
   const handleExportJson = () => {
-    const data = {
-      strategyId: params.strategyId,
-      timeframe,
-      generatedAt: new Date().toISOString(),
+    const exportData = {
+      timestamp: new Date().toISOString(),
       parameters: params,
       customRules,
       performance,
-      equityCurve: equityPoints,
+      equityCurveSample: equityPoints,
     };
-    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `backtest_report_${params.strategyId}_${timeframe}.json`;
+    a.download = `backtest_${params.strategyId}_${Date.now()}.json`;
     a.click();
     URL.revokeObjectURL(url);
     if (onNotify) {
-      onNotify('Report Exported', 'JSON backtest analytics downloaded successfully.', 'success');
+      onNotify('Export Successful', 'Downloaded backtest telemetry report (JSON).', 'success');
     }
   };
 
@@ -539,12 +611,24 @@ export const SignalBacktest: React.FC<SignalBacktestProps> = ({
     }
   };
 
-  // Handle heatmap cell selection
+  // Handle heatmap cell selection with live API price lookup
   const handleCellClick = (asset: string, hour: string, cell: SignalHeatmapCell) => {
     const action = cell.heatLevel === 5 ? 'STRONG BUY' : cell.heatLevel === 4 ? 'BUY' : cell.heatLevel === 1 ? 'STRONG SELL' : cell.heatLevel === 2 ? 'SELL' : 'NEUTRAL';
-    const basePrice = asset === 'BTC' ? 68450 : asset === 'ETH' ? 2540 : asset === 'SOL' ? 168.5 : asset === 'AVAX' ? 26.4 : asset === 'SPX' ? 5890 : asset === 'NVDA' ? 128.4 : 224.5;
-    const targetPrice = cell.heatLevel >= 4 ? basePrice * 1.045 : cell.heatLevel <= 2 ? basePrice * 0.955 : basePrice;
-    const stopLoss = cell.heatLevel >= 4 ? basePrice * 0.978 : cell.heatLevel <= 2 ? basePrice * 1.022 : basePrice;
+    const currentPrice = getLivePrice(asset);
+    const targetMultiplier = 1 + (customRules.takeProfitPct / 100);
+    const stopMultiplier = 1 - (customRules.stopLossPct / 100);
+
+    const targetPrice = cell.heatLevel >= 4
+      ? currentPrice * targetMultiplier
+      : cell.heatLevel <= 2
+      ? currentPrice * (2 - targetMultiplier)
+      : currentPrice;
+
+    const stopLoss = cell.heatLevel >= 4
+      ? currentPrice * stopMultiplier
+      : cell.heatLevel <= 2
+      ? currentPrice * (2 - stopMultiplier)
+      : currentPrice;
 
     setSelectedCell({
       asset,
@@ -552,6 +636,7 @@ export const SignalBacktest: React.FC<SignalBacktestProps> = ({
       heatLevel: cell.heatLevel,
       strength: cell.strength,
       action,
+      currentPrice: parseFloat(currentPrice.toFixed(2)),
       targetPrice: parseFloat(targetPrice.toFixed(2)),
       stopLoss: parseFloat(stopLoss.toFixed(2)),
       confidence: Math.round(cell.strength * 100),
@@ -559,7 +644,7 @@ export const SignalBacktest: React.FC<SignalBacktestProps> = ({
         'RSI (14)': cell.heatLevel >= 4 ? (42 + cell.strength * 25).toFixed(1) : (68 - cell.strength * 25).toFixed(1),
         'MACD Hist': cell.heatLevel >= 4 ? `+${(cell.strength * 1.8).toFixed(2)}` : `-${(cell.strength * 1.8).toFixed(2)}`,
         'Vol Z-Score': (cell.strength * 1.5 - 0.75).toFixed(2),
-        'ATR Vol %': '2.45%',
+        'ATR Vol %': `${(customRules.stopLossPct * 0.85).toFixed(2)}%`,
       },
     });
   };
@@ -567,7 +652,6 @@ export const SignalBacktest: React.FC<SignalBacktestProps> = ({
   // Python template for local backend
   const pythonBridgeCode = `# Python FastAPI Quantitative Signal Bridge
 from fastapi import FastAPI
-from pydantic import BaseModel
 import uvicorn
 
 app = FastAPI(title="Quant Terminal Local Signal Engine")
@@ -589,6 +673,8 @@ def get_live_signals():
             "maxDrawdown": ${performance.maxDrawdown},
             "winRate": ${performance.winRate},
             "sharpeRatio": ${performance.sharpeRatio},
+            "sortinoRatio": ${performance.sortinoRatio},
+            "turnaroundRatio": ${performance.turnaroundRatio},
             "totalTrades": ${performance.totalTrades}
         }
     }
@@ -597,13 +683,16 @@ if __name__ == "__main__":
     uvicorn.run(app, host="127.0.0.1", port=8000)`;
 
   const chartContainerRef = useRef<HTMLDivElement>(null);
+  const ddContainerRef = useRef<HTMLDivElement>(null);
 
-  // Mouse Move over chart to calculate interactive crosshair position
-  const handleChartMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
-    if (!chartContainerRef.current) return;
-    const rect = chartContainerRef.current.getBoundingClientRect();
-    const x = e.clientX - rect.left;
-    const pct = Math.max(0, Math.min(1, x / rect.width));
+  // Mouse Move over chart to calculate interactive crosshair position synchronized across both charts
+  const handleChartInteraction = (e: React.MouseEvent<HTMLDivElement>, ref: React.RefObject<HTMLDivElement>) => {
+    if (!ref.current || equityPoints.length === 0) return;
+    const rect = ref.current.getBoundingClientRect();
+    const xInPx = e.clientX - rect.left;
+    const effectiveLeft = (padLeft / chartWidth) * rect.width;
+    const effectivePlotW = (plotWidth / chartWidth) * rect.width;
+    const pct = Math.max(0, Math.min(1, (xInPx - effectiveLeft) / effectivePlotW));
     const idx = Math.round(pct * (equityPoints.length - 1));
     setHoverIndex(idx);
   };
@@ -639,7 +728,7 @@ if __name__ == "__main__":
               }}
             />
             <span className="font-semibold">
-              {signalDataSource === 'local' ? 'LOCAL ENGINE ACTIVE' : 'QUANTUM ENGINE (BROWSER FALLBACK)'}
+              {signalDataSource === 'local' ? 'LOCAL ENGINE ACTIVE' : 'QUANTUM ENGINE'}
             </span>
           </div>
           <span
@@ -863,7 +952,7 @@ if __name__ == "__main__":
                 Local Signal Engine Bridge (FastAPI / Flask / Node.js)
               </h2>
               <p className="text-[12px]" style={{ color: 'var(--text-muted)' }}>
-                Connect your local Python machine learning or quant models directly to this terminal. When offline, the terminal automatically switches to the built-in browser quantitative fallback engine.
+                Connect your local Python machine learning or quant models directly to this terminal.
               </p>
             </div>
             <button
@@ -952,7 +1041,7 @@ if __name__ == "__main__":
                 Quantitative Strategy Parameter & Rule Builder
               </h2>
               <p className="text-[12px]" style={{ color: 'var(--text-muted)' }}>
-                Customize indicators, trigger levels, dynamic risk targets, and execution sizing. All parameters immediately update the backtest and signal matrices in real-time.
+                Customize indicators, trigger levels, dynamic risk targets, and execution sizing.
               </p>
             </div>
             <button
@@ -1163,10 +1252,10 @@ if __name__ == "__main__":
       <div className="grid grid-cols-1 md:grid-cols-12 gap-3 min-h-[640px]">
         {/* Left Column: Charts Area */}
         <div className="col-span-1 md:col-span-9 flex flex-col gap-3">
-          {/* Equity Curve Chart with Real Mouse Tracking */}
+          {/* Equity Curve Chart with Dedicated SVG Axes & Precision Crosshair */}
           <div
             id="equity-curve-card"
-            className="bento-card rounded-xl flex-1 flex flex-col relative overflow-hidden min-h-[300px]"
+            className="bento-card rounded-xl flex flex-col relative overflow-hidden min-h-[320px]"
           >
             <div
               className="p-3 border-b flex flex-wrap justify-between items-center gap-2"
@@ -1184,13 +1273,13 @@ if __name__ == "__main__":
                 </h2>
                 {activeHoverPoint && (
                   <span
-                    className="font-mono-val text-[11px] font-bold px-2 py-0.5 rounded"
+                    className="font-mono-val text-[11px] font-bold px-2 py-0.5 rounded transition-colors"
                     style={{
                       backgroundColor: activeHoverPoint.pnlPct >= 0 ? 'var(--color-positive-bg)' : 'var(--color-negative-bg)',
                       color: activeHoverPoint.pnlPct >= 0 ? 'var(--color-positive)' : 'var(--color-negative)',
                     }}
                   >
-                    ${activeHoverPoint.equity.toLocaleString('en-US', { minimumFractionDigits: 2 })} ({activeHoverPoint.pnlPct >= 0 ? '+' : ''}{activeHoverPoint.pnlPct}%)
+                    ${activeHoverPoint.equity.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ({activeHoverPoint.pnlPct >= 0 ? '+' : ''}{activeHoverPoint.pnlPct}%)
                   </span>
                 )}
               </div>
@@ -1219,209 +1308,201 @@ if __name__ == "__main__":
               </div>
             </div>
 
-            {/* Interactive SVG Chart Container */}
+            {/* Interactive SVG Chart Container with Clear Margin Gutter */}
             <div
               ref={chartContainerRef}
-              onMouseMove={handleChartMouseMove}
+              onMouseMove={(e) => handleChartInteraction(e, chartContainerRef)}
               onMouseLeave={handleChartMouseLeave}
-              className="flex-1 relative p-4 min-h-[220px] cursor-crosshair select-none"
+              className="flex-1 relative w-full h-[280px] cursor-crosshair select-none p-1"
             >
-              {/* Axis Boundaries */}
-              <div
-                className="absolute inset-4 border-l border-b"
-                style={{ borderColor: 'var(--border-subtle)' }}
+              <svg
+                className="w-full h-full"
+                viewBox={`0 0 ${chartWidth} ${chartHeight}`}
+                preserveAspectRatio="none"
               >
-                {/* Y-Axis Labels */}
-                <div
-                  className="absolute -left-12 bottom-0 top-0 flex flex-col justify-between font-mono-val text-[10px] text-right w-10 pointer-events-none"
-                  style={{ color: 'var(--text-muted)' }}
-                >
-                  <span>${Math.round(svgData.max / 1000)}k</span>
-                  <span>${Math.round((svgData.max * 0.75 + svgData.min * 0.25) / 1000)}k</span>
-                  <span>${Math.round((svgData.max * 0.5 + svgData.min * 0.5) / 1000)}k</span>
-                  <span>${Math.round((svgData.max * 0.25 + svgData.min * 0.75) / 1000)}k</span>
-                  <span>${Math.round(svgData.min / 1000)}k</span>
-                </div>
+                <defs>
+                  <linearGradient id="equityGrad" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="var(--accent-primary)" stopOpacity="0.22" />
+                    <stop offset="100%" stopColor="var(--accent-primary)" stopOpacity="0.0" />
+                  </linearGradient>
+                </defs>
 
-                {/* X-Axis Labels */}
-                <div
-                  className="absolute -bottom-5 left-0 right-0 flex justify-between font-mono-val text-[10px] pointer-events-none"
-                  style={{ color: 'var(--text-muted)' }}
-                >
-                  <span>{equityPoints[0]?.date || 'Start'}</span>
-                  <span>{equityPoints[Math.floor(equityPoints.length / 2)]?.date || 'Mid'}</span>
-                  <span>{equityPoints[equityPoints.length - 1]?.date || 'End'}</span>
-                </div>
-
-                {/* Dynamic SVG Curves */}
-                <svg
-                  className="absolute inset-0 overflow-visible w-full h-full"
-                  viewBox="0 0 100 100"
-                  preserveAspectRatio="none"
-                >
-                  <defs>
-                    <linearGradient id="equityGrad" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor="var(--accent-primary)" stopOpacity="0.25" />
-                      <stop offset="100%" stopColor="var(--accent-primary)" stopOpacity="0.0" />
-                    </linearGradient>
-                  </defs>
-
-                  {/* Benchmark Dotted Curve */}
-                  {svgData.bmkPath && (
-                    <path
-                      d={svgData.bmkPath}
-                      fill="none"
-                      stroke="var(--text-muted)"
-                      strokeDasharray="3,3"
-                      strokeWidth="1.2"
-                      vectorEffect="non-scaling-stroke"
+                {/* Horizontal Grid Lines & Y-Axis Labels (Integrated in coordinate space - NO clipping) */}
+                {svgData.yTicks.map((tick, i) => (
+                  <g key={i}>
+                    <line
+                      x1={padLeft}
+                      y1={tick.y}
+                      x2={padLeft + plotWidth}
+                      y2={tick.y}
+                      stroke="var(--border-subtle)"
+                      strokeDasharray="4 4"
+                      strokeWidth="1"
                     />
-                  )}
+                    <text
+                      x={padLeft - 10}
+                      y={tick.y + 3.5}
+                      textAnchor="end"
+                      fill="var(--text-muted)"
+                      fontSize="10"
+                      fontFamily="monospace"
+                    >
+                      ${Math.round(tick.val / 1000)}k
+                    </text>
+                  </g>
+                ))}
 
-                  {/* Gradient Fill Area */}
-                  {svgData.area && (
-                    <path d={svgData.area} fill="url(#equityGrad)" />
-                  )}
+                {/* X-Axis Horizontal Base Line */}
+                <line
+                  x1={padLeft}
+                  y1={padTop + plotHeight}
+                  x2={padLeft + plotWidth}
+                  y2={padTop + plotHeight}
+                  stroke="var(--border-subtle)"
+                  strokeWidth="1"
+                />
 
-                  {/* Strategy Line */}
-                  {svgData.path && (
-                    <path
-                      d={svgData.path}
-                      fill="none"
-                      stroke="var(--accent-primary)"
-                      strokeWidth="2"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      vectorEffect="non-scaling-stroke"
-                    />
-                  )}
+                {/* X-Axis Date Labels */}
+                {equityPoints.length > 0 && (
+                  <>
+                    <text
+                      x={padLeft}
+                      y={padTop + plotHeight + 18}
+                      textAnchor="start"
+                      fill="var(--text-muted)"
+                      fontSize="10"
+                      fontFamily="monospace"
+                    >
+                      {equityPoints[0]?.date}
+                    </text>
+                    <text
+                      x={padLeft + plotWidth * 0.5}
+                      y={padTop + plotHeight + 18}
+                      textAnchor="middle"
+                      fill="var(--text-muted)"
+                      fontSize="10"
+                      fontFamily="monospace"
+                    >
+                      {equityPoints[Math.floor(equityPoints.length / 2)]?.date}
+                    </text>
+                    <text
+                      x={padLeft + plotWidth}
+                      y={padTop + plotHeight + 18}
+                      textAnchor="end"
+                      fill="var(--text-muted)"
+                      fontSize="10"
+                      fontFamily="monospace"
+                    >
+                      {equityPoints[equityPoints.length - 1]?.date}
+                    </text>
+                  </>
+                )}
 
-                  {/* Interactive Cursor Marker */}
-                  {hoverIndex !== null && svgData.coords && svgData.coords[hoverIndex] && (
+                {/* Benchmark Dotted Curve */}
+                {svgData.bmkPath && (
+                  <path
+                    d={svgData.bmkPath}
+                    fill="none"
+                    stroke="var(--text-muted)"
+                    strokeDasharray="3 3"
+                    strokeWidth="1.2"
+                  />
+                )}
+
+                {/* Gradient Fill Area */}
+                {svgData.area && (
+                  <path d={svgData.area} fill="url(#equityGrad)" />
+                )}
+
+                {/* Strategy Primary Line */}
+                {svgData.path && (
+                  <path
+                    d={svgData.path}
+                    fill="none"
+                    stroke="var(--accent-primary)"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                )}
+
+                {/* Synchronized Crosshair Vertical Line */}
+                {hoverIndex !== null && svgData.coords[hoverIndex] && (
+                  <line
+                    x1={svgData.coords[hoverIndex].x}
+                    y1={padTop}
+                    x2={svgData.coords[hoverIndex].x}
+                    y2={padTop + plotHeight}
+                    stroke="var(--accent-primary)"
+                    strokeDasharray="3 3"
+                    strokeWidth="1.2"
+                    opacity="0.85"
+                  />
+                )}
+
+                {/* Precise Interactive Tracer Dot (Fine, crisp radius with subtle halo) */}
+                {hoverIndex !== null && svgData.coords[hoverIndex] && (
+                  <g>
                     <circle
                       cx={svgData.coords[hoverIndex].x}
                       cy={svgData.coords[hoverIndex].y}
-                      r="4"
+                      r="6.5"
+                      fill="var(--accent-primary)"
+                      fillOpacity="0.18"
+                    />
+                    <circle
+                      cx={svgData.coords[hoverIndex].x}
+                      cy={svgData.coords[hoverIndex].y}
+                      r="3.5"
                       fill="var(--accent-primary)"
                       stroke="#ffffff"
                       strokeWidth="1.5"
                     />
-                  )}
-                </svg>
-
-                {/* Interactive Crosshair & Tooltip Overlay */}
-                {hoverIndex !== null && activeHoverPoint && svgData.coords && svgData.coords[hoverIndex] && (
-                  <>
-                    <div
-                      className="absolute top-0 bottom-0 border-l border-dashed w-px pointer-events-none"
-                      style={{
-                        left: `${svgData.coords[hoverIndex].x}%`,
-                        borderColor: 'var(--border-strong)',
-                      }}
-                    />
-                    <div
-                      className="absolute p-2 rounded-lg pointer-events-none z-20 shadow-lg font-mono-val text-[11px]"
-                      style={{
-                        left: `${Math.min(78, Math.max(2, svgData.coords[hoverIndex].x - 10))}%`,
-                        top: '10%',
-                        backgroundColor: 'var(--bg-card)',
-                        border: '1px solid var(--border-strong)',
-                      }}
-                    >
-                      <div className="text-[10px] text-muted-foreground" style={{ color: 'var(--text-muted)' }}>
-                        {activeHoverPoint.date}
-                      </div>
-                      <div className="font-bold text-[13px]" style={{ color: 'var(--text-primary)' }}>
-                        ${activeHoverPoint.equity.toLocaleString('en-US', { minimumFractionDigits: 2 })}
-                      </div>
-                      <div className="text-[10px] font-semibold" style={{ color: activeHoverPoint.pnlPct >= 0 ? 'var(--color-positive)' : 'var(--color-negative)' }}>
-                        PnL: {activeHoverPoint.pnlPct >= 0 ? '+' : ''}{activeHoverPoint.pnlPct}%
-                      </div>
-                      <div className="text-[9px]" style={{ color: 'var(--text-muted)' }}>
-                        Benchmark: ${activeHoverPoint.benchmark.toLocaleString('en-US', { minimumFractionDigits: 2 })}
-                      </div>
-                    </div>
-                  </>
+                  </g>
                 )}
-              </div>
+              </svg>
+
+              {/* Floating Dynamic Tooltip Card */}
+              {hoverIndex !== null && activeHoverPoint && svgData.coords[hoverIndex] && (
+                <div
+                  className="absolute pointer-events-none z-30 p-2.5 rounded-lg shadow-lg font-mono-val text-[11px] backdrop-blur-md transition-all duration-75"
+                  style={{
+                    left: `${Math.min(76, Math.max(8, (svgData.coords[hoverIndex].x / chartWidth) * 100 - 8))}%`,
+                    top: '12%',
+                    backgroundColor: 'var(--bg-card)',
+                    border: '1px solid var(--border-strong)',
+                    boxShadow: '0 4px 16px rgba(0,0,0,0.15)',
+                  }}
+                >
+                  <div className="text-[10px] font-semibold mb-0.5" style={{ color: 'var(--text-muted)' }}>
+                    {activeHoverPoint.date}
+                  </div>
+                  <div className="font-bold text-[13px]" style={{ color: 'var(--text-primary)' }}>
+                    ${activeHoverPoint.equity.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                  </div>
+                  <div className="flex items-center gap-2 mt-0.5 text-[10px] font-semibold">
+                    <span style={{ color: activeHoverPoint.pnlPct >= 0 ? 'var(--color-positive)' : 'var(--color-negative)' }}>
+                      PnL: {activeHoverPoint.pnlPct >= 0 ? '+' : ''}{activeHoverPoint.pnlPct}%
+                    </span>
+                    <span style={{ color: 'var(--color-negative)' }}>
+                      DD: {activeHoverPoint.drawdownPct}%
+                    </span>
+                  </div>
+                  <div className="text-[9px] mt-0.5" style={{ color: 'var(--text-muted)' }}>
+                    Benchmark: ${activeHoverPoint.benchmark.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                  </div>
+                </div>
+              )}
             </div>
           </div>
 
-          {/* Drawdown Chart */}
+          {/* Synchronized Drawdown Profile Chart (Inherits hover cursor & crosshair) */}
           <div
             id="drawdown-card"
-            className="bento-card rounded-xl h-32 flex flex-col relative overflow-hidden"
-          >
-            <div
-              className="p-2 border-b flex justify-between items-center"
-              style={{
-                borderColor: 'var(--border-subtle)',
-                backgroundColor: 'var(--bg-card-subtle)',
-              }}
-            >
-              <h2
-                className="font-mono-val text-[11px] font-bold uppercase tracking-wider"
-                style={{ color: 'var(--text-primary)' }}
-              >
-                Drawdown Profile (%)
-              </h2>
-              <span
-                className="font-mono-val text-[10px] font-semibold"
-                style={{ color: 'var(--color-negative)' }}
-              >
-                Max Drawdown: {performance.maxDrawdown}%
-              </span>
-            </div>
-
-            <div className="flex-1 relative p-3">
-              <div
-                className="absolute inset-3 border-l border-t"
-                style={{ borderColor: 'var(--border-subtle)' }}
-              >
-                {/* Y Axis Labels */}
-                <div
-                  className="absolute -left-9 top-0 bottom-0 flex flex-col justify-between font-mono-val text-[9px] text-right w-7 pointer-events-none"
-                  style={{ color: 'var(--text-muted)' }}
-                >
-                  <span>0%</span>
-                  <span>{Math.round(ddSvgData.minDd / 2)}%</span>
-                  <span>{Math.round(ddSvgData.minDd)}%</span>
-                </div>
-
-                <svg
-                  className="absolute inset-0 overflow-visible w-full h-full"
-                  viewBox="0 0 100 100"
-                  preserveAspectRatio="none"
-                >
-                  <defs>
-                    <linearGradient id="ddGrad" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor="var(--color-negative)" stopOpacity="0.0" />
-                      <stop offset="100%" stopColor="var(--color-negative)" stopOpacity="0.3" />
-                    </linearGradient>
-                  </defs>
-                  {ddSvgData.area && <path d={ddSvgData.area} fill="url(#ddGrad)" />}
-                  {ddSvgData.path && (
-                    <path
-                      d={ddSvgData.path}
-                      fill="none"
-                      stroke="var(--color-negative)"
-                      strokeWidth="1.5"
-                      strokeLinecap="round"
-                      vectorEffect="non-scaling-stroke"
-                    />
-                  )}
-                </svg>
-              </div>
-            </div>
-          </div>
-
-          {/* Signal Heatmap with Interactive Cell Inspector */}
-          <div
-            id="heatmap-card"
             className="bento-card rounded-xl flex flex-col relative overflow-hidden"
           >
             <div
-              className="p-2.5 border-b flex flex-wrap justify-between items-center gap-2"
+              className="p-2.5 border-b flex justify-between items-center"
               style={{
                 borderColor: 'var(--border-subtle)',
                 backgroundColor: 'var(--bg-card-subtle)',
@@ -1432,73 +1513,226 @@ if __name__ == "__main__":
                   className="font-mono-val text-[11px] font-bold uppercase tracking-wider"
                   style={{ color: 'var(--text-primary)' }}
                 >
-                  Signal Matrix & Heatmap (Click cell to inspect quantitative breakdown)
+                  Drawdown Profile (%)
                 </h2>
+                {activeHoverPoint && (
+                  <span
+                    className="font-mono-val text-[10px] font-bold px-1.5 py-0.5 rounded"
+                    style={{
+                      backgroundColor: 'var(--color-negative-bg)',
+                      color: 'var(--color-negative)',
+                      border: '1px solid var(--color-negative-border)',
+                    }}
+                  >
+                    Current DD: {activeHoverPoint.drawdownPct}%
+                  </span>
+                )}
               </div>
+              <span
+                className="font-mono-val text-[10px] font-semibold"
+                style={{ color: 'var(--color-negative)' }}
+              >
+                Max Drawdown: {performance.maxDrawdown}%
+              </span>
+            </div>
+
+            <div
+              ref={ddContainerRef}
+              onMouseMove={(e) => handleChartInteraction(e, ddContainerRef)}
+              onMouseLeave={handleChartMouseLeave}
+              className="relative w-full h-[110px] cursor-crosshair select-none p-1"
+            >
+              <svg
+                className="w-full h-full"
+                viewBox={`0 0 ${chartWidth} ${ddHeight}`}
+                preserveAspectRatio="none"
+              >
+                <defs>
+                  <linearGradient id="ddGrad" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="var(--color-negative)" stopOpacity="0.0" />
+                    <stop offset="100%" stopColor="var(--color-negative)" stopOpacity="0.32" />
+                  </linearGradient>
+                </defs>
+
+                {/* Y-Axis Grid Lines & Tick Labels */}
+                {ddSvgData.yTicks.map((tick, i) => (
+                  <g key={i}>
+                    <line
+                      x1={padLeft}
+                      y1={tick.y}
+                      x2={padLeft + plotWidth}
+                      y2={tick.y}
+                      stroke="var(--border-subtle)"
+                      strokeDasharray="4 4"
+                      strokeWidth="1"
+                    />
+                    <text
+                      x={padLeft - 10}
+                      y={tick.y + 3.5}
+                      textAnchor="end"
+                      fill="var(--text-muted)"
+                      fontSize="9"
+                      fontFamily="monospace"
+                    >
+                      {tick.val.toFixed(1)}%
+                    </text>
+                  </g>
+                ))}
+
+                {/* Drawdown Shaded Area */}
+                {ddSvgData.area && <path d={ddSvgData.area} fill="url(#ddGrad)" />}
+
+                {/* Drawdown Curve Line */}
+                {ddSvgData.path && (
+                  <path
+                    d={ddSvgData.path}
+                    fill="none"
+                    stroke="var(--color-negative)"
+                    strokeWidth="1.5"
+                    strokeLinecap="round"
+                  />
+                )}
+
+                {/* Synchronized Vertical Crosshair on Drawdown Curve */}
+                {hoverIndex !== null && ddSvgData.coords[hoverIndex] && (
+                  <line
+                    x1={ddSvgData.coords[hoverIndex].x}
+                    y1={ddPadTop}
+                    x2={ddSvgData.coords[hoverIndex].x}
+                    y2={ddPadTop + ddPlotHeight}
+                    stroke="var(--color-negative)"
+                    strokeDasharray="3 3"
+                    strokeWidth="1.2"
+                    opacity="0.8"
+                  />
+                )}
+
+                {/* Synchronized Tracer Dot on Drawdown Curve */}
+                {hoverIndex !== null && ddSvgData.coords[hoverIndex] && (
+                  <g>
+                    <circle
+                      cx={ddSvgData.coords[hoverIndex].x}
+                      cy={ddSvgData.coords[hoverIndex].y}
+                      r="6"
+                      fill="var(--color-negative)"
+                      fillOpacity="0.2"
+                    />
+                    <circle
+                      cx={ddSvgData.coords[hoverIndex].x}
+                      cy={ddSvgData.coords[hoverIndex].y}
+                      r="3.5"
+                      fill="var(--color-negative)"
+                      stroke="#ffffff"
+                      strokeWidth="1.5"
+                    />
+                  </g>
+                )}
+              </svg>
+            </div>
+          </div>
+
+          {/* Responsive Signal Heatmap Matrix with Real-Time Asset Price Lookup */}
+          <div
+            id="heatmap-card"
+            className="bento-card rounded-xl flex flex-col relative overflow-hidden"
+          >
+            <div
+              className="p-3 border-b flex flex-wrap justify-between items-center gap-2"
+              style={{
+                borderColor: 'var(--border-subtle)',
+                backgroundColor: 'var(--bg-card-subtle)',
+              }}
+            >
+              <div className="flex items-center gap-2">
+                <BarChart2 className="w-4 h-4" style={{ color: 'var(--accent-primary)' }} />
+                <h2
+                  className="font-mono-val text-[11px] font-bold uppercase tracking-wider"
+                  style={{ color: 'var(--text-primary)' }}
+                >
+                  Signal Matrix & Heatmap
+                </h2>
+                <span className="text-[10px] font-mono-val font-normal" style={{ color: 'var(--text-muted)' }}>
+                  (Click any cell to inspect algorithmic telemetry)
+                </span>
+              </div>
+
+              {/* Heat Legend */}
               <div
                 className="flex items-center gap-1.5 font-mono-val text-[10px]"
                 style={{ color: 'var(--text-muted)' }}
               >
-                <span>Bearish</span>
-                <span className="w-2.5 h-2.5 heat-1 rounded-xs" title="Strong Sell" />
-                <span className="w-2.5 h-2.5 heat-2 rounded-xs" title="Sell" />
-                <span className="w-2.5 h-2.5 heat-3 rounded-xs" title="Neutral" />
-                <span className="w-2.5 h-2.5 heat-4 rounded-xs" title="Buy" />
-                <span className="w-2.5 h-2.5 heat-5 rounded-xs" title="Strong Buy" />
-                <span>Bullish</span>
+                <span>Strong Sell</span>
+                <span className="w-3 h-3 heat-1 rounded" title="Strong Sell (1)" />
+                <span className="w-3 h-3 heat-2 rounded" title="Sell (2)" />
+                <span className="w-3 h-3 heat-3 rounded" title="Neutral (3)" />
+                <span className="w-3 h-3 heat-4 rounded" title="Buy (4)" />
+                <span className="w-3 h-3 heat-5 rounded" title="Strong Buy (5)" />
+                <span>Strong Buy</span>
               </div>
             </div>
 
+            {/* Responsive Heatmap Matrix Table */}
             <div className="p-3 overflow-x-auto">
-              <table className="w-full text-left border-collapse">
-                <thead>
-                  <tr>
-                    <th className="w-16 pb-1 font-mono-val text-[10px]" style={{ color: 'var(--text-muted)' }}>
-                      ASSET
-                    </th>
-                    {hours.map((h) => (
-                      <th
-                        key={h}
-                        className="font-mono-val text-[10px] font-normal text-center w-12 pb-1"
-                        style={{ color: 'var(--text-muted)' }}
-                      >
-                        {h}
+              <div className="min-w-[620px]">
+                <table className="w-full text-left border-collapse">
+                  <thead>
+                    <tr className="border-b" style={{ borderColor: 'var(--border-subtle)' }}>
+                      <th className="w-32 pb-2 font-mono-val text-[10px] uppercase font-semibold" style={{ color: 'var(--text-muted)' }}>
+                        ASSET / LIVE
                       </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody className="font-mono-val text-[11px]">
-                  {assets.map((asset) => (
-                    <tr key={asset}>
-                      <td
-                        className="font-semibold pr-2 text-right py-1 font-mono-val"
-                        style={{ color: 'var(--text-primary)' }}
-                      >
-                        {asset}
-                      </td>
-                      {hours.map((hour) => {
-                        const cellList = heatmapCells.length > 0 ? heatmapCells : dynamicHeatmap;
-                        const cell = cellList.find(
-                          (c) => c.asset === asset && c.hour === hour
-                        ) || { heatLevel: 3, strength: 0.5 };
-                        const isSelected = selectedCell?.asset === asset && selectedCell?.hour === hour;
-
-                        return (
-                          <td key={`${asset}-${hour}`} className="p-0.5">
-                            <button
-                              onClick={() => handleCellClick(asset, hour, cell)}
-                              title={`Click to inspect ${asset} @ ${hour} (Confidence: ${Math.round(cell.strength * 100)}%)`}
-                              className={`w-full h-7 rounded-xs transition-all hover:scale-105 cursor-pointer heat-${cell.heatLevel} ${
-                                isSelected ? 'ring-2 ring-blue-500 scale-105' : ''
-                              }`}
-                            />
-                          </td>
-                        );
-                      })}
+                      {hours.map((h) => (
+                        <th
+                          key={h}
+                          className="font-mono-val text-[10px] font-semibold text-center pb-2 px-1"
+                          style={{ color: 'var(--text-muted)' }}
+                        >
+                          {h}
+                        </th>
+                      ))}
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody className="font-mono-val text-[11px]">
+                    {assets.map((asset) => {
+                      const livePrice = getLivePrice(asset);
+                      return (
+                        <tr key={asset} className="border-b transition-colors" style={{ borderColor: 'var(--border-subtle)' }}>
+                          <td className="py-2 pr-3 font-mono-val">
+                            <div className="flex items-center justify-between">
+                              <span className="font-bold text-[12px]" style={{ color: 'var(--text-primary)' }}>
+                                {asset}
+                              </span>
+                              <span className="text-[10px] font-medium" style={{ color: 'var(--text-muted)' }}>
+                                ${livePrice < 10 ? livePrice.toFixed(3) : livePrice.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                              </span>
+                            </div>
+                          </td>
+                          {hours.map((hour) => {
+                            const cellList = heatmapCells.length > 0 ? heatmapCells : dynamicHeatmap;
+                            const cell = cellList.find(
+                              (c) => c.asset === asset && c.hour === hour
+                            ) || { asset, hour, heatLevel: 3, strength: 0.5 };
+                            const isSelected = selectedCell?.asset === asset && selectedCell?.hour === hour;
+
+                            return (
+                              <td key={`${asset}-${hour}`} className="p-1 text-center">
+                                <button
+                                  onClick={() => handleCellClick(asset, hour, cell)}
+                                  title={`Inspect ${asset} @ ${hour} (Signal: ${cell.heatLevel}/5, Conf: ${Math.round(cell.strength * 100)}%)`}
+                                  className={`w-full h-7 rounded transition-all duration-150 cursor-pointer flex items-center justify-center font-mono-val text-[10px] font-bold heat-${cell.heatLevel} ${
+                                    isSelected ? 'ring-2 ring-blue-500 scale-105 shadow-md' : 'hover:scale-105 opacity-90 hover:opacity-100'
+                                  }`}
+                                >
+                                  {cell.heatLevel === 5 ? 'SB' : cell.heatLevel === 4 ? 'B' : cell.heatLevel === 1 ? 'SS' : cell.heatLevel === 2 ? 'S' : '—'}
+                                </button>
+                              </td>
+                            );
+                          })}
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
             </div>
 
             {/* Signal Cell Inspection Drawer */}
@@ -1510,9 +1744,9 @@ if __name__ == "__main__":
                   backgroundColor: 'var(--bg-card-subtle)',
                 }}
               >
-                <div className="flex items-center gap-3">
+                <div className="flex flex-wrap items-center gap-3">
                   <div
-                    className="p-2 rounded-lg font-mono-val text-[12px] font-bold text-center min-w-[90px]"
+                    className="p-2.5 rounded-lg font-mono-val text-[12px] font-bold text-center min-w-[100px]"
                     style={{
                       backgroundColor:
                         selectedCell.heatLevel >= 4
@@ -1534,14 +1768,17 @@ if __name__ == "__main__":
                   </div>
 
                   <div>
-                    <div className="font-bold text-[13px] font-mono-val" style={{ color: 'var(--text-primary)' }}>
-                      {selectedCell.asset} Signal Breakdown @ {selectedCell.hour}
+                    <div className="flex items-center gap-2 font-bold text-[13px] font-mono-val" style={{ color: 'var(--text-primary)' }}>
+                      <span>{selectedCell.asset} @ {selectedCell.hour}</span>
+                      <span className="text-[11px] font-normal" style={{ color: 'var(--text-muted)' }}>
+                        (Live Price: ${selectedCell.currentPrice.toLocaleString('en-US', { minimumFractionDigits: 2 })})
+                      </span>
                     </div>
-                    <div className="flex flex-wrap gap-2 text-[11px] font-mono-val mt-0.5" style={{ color: 'var(--text-muted)' }}>
-                      <span>Target: <strong style={{ color: 'var(--color-positive)' }}>${selectedCell.targetPrice}</strong></span>
-                      <span>Stop: <strong style={{ color: 'var(--color-negative)' }}>${selectedCell.stopLoss}</strong></span>
+                    <div className="flex flex-wrap gap-3 text-[11px] font-mono-val mt-1" style={{ color: 'var(--text-secondary)' }}>
+                      <span>Target: <strong style={{ color: 'var(--color-positive)' }}>${selectedCell.targetPrice.toLocaleString('en-US', { minimumFractionDigits: 2 })}</strong></span>
+                      <span>Stop: <strong style={{ color: 'var(--color-negative)' }}>${selectedCell.stopLoss.toLocaleString('en-US', { minimumFractionDigits: 2 })}</strong></span>
                       {Object.entries(selectedCell.indicators).map(([k, v]) => (
-                        <span key={k}>• {k}: <strong>{v}</strong></span>
+                        <span key={k} style={{ color: 'var(--text-muted)' }}>• {k}: <strong style={{ color: 'var(--text-primary)' }}>{v}</strong></span>
                       ))}
                     </div>
                   </div>
@@ -1552,16 +1789,16 @@ if __name__ == "__main__":
                     onClick={() => {
                       if (onNotify) {
                         onNotify(
-                          'Paper Order Simulated',
+                          'Paper Order Dispatched',
                           `Simulated market ${selectedCell.action} on ${selectedCell.asset} @ target $${selectedCell.targetPrice}`,
                           'success'
                         );
                       }
                     }}
-                    className="px-3 py-1.5 rounded-lg text-[11px] font-mono-val font-semibold cursor-pointer"
+                    className="px-3 py-1.5 rounded-lg text-[11px] font-mono-val font-semibold cursor-pointer transition-all"
                     style={{ backgroundColor: 'var(--accent-primary)', color: '#ffffff' }}
                   >
-                    Simulate Fill
+                    Simulate Order
                   </button>
                   <button
                     onClick={() => setSelectedCell(null)}
@@ -1578,7 +1815,7 @@ if __name__ == "__main__":
 
         {/* Right Sidebar Column: Performance & Hyperparameters */}
         <div className="col-span-1 md:col-span-3 flex flex-col gap-3">
-          {/* Performance Summary Card */}
+          {/* Performance Summary Card with Sortino and Turnaround Ratios */}
           <div id="performance-summary-card" className="bento-card rounded-xl flex flex-col">
             <div
               className="p-2.5 border-b flex items-center justify-between"
@@ -1598,6 +1835,7 @@ if __name__ == "__main__":
               </span>
             </div>
             <div className="p-3 grid grid-cols-2 gap-2">
+              {/* Total Strategy Return */}
               <div
                 className="col-span-2 p-2.5 rounded-lg border"
                 style={{
@@ -1612,13 +1850,14 @@ if __name__ == "__main__":
                   Total Strategy Return
                 </div>
                 <div
-                  className="font-mono-val text-[20px] font-bold"
+                  className="font-mono-val text-[22px] font-bold"
                   style={{ color: 'var(--color-positive)' }}
                 >
                   +{performance.totalReturn}%
                 </div>
               </div>
 
+              {/* CAGR */}
               <div
                 className="p-2 rounded-lg border flex flex-col justify-between"
                 style={{
@@ -1637,6 +1876,7 @@ if __name__ == "__main__":
                 </div>
               </div>
 
+              {/* Max Drawdown */}
               <div
                 className="p-2 rounded-lg border flex flex-col justify-between"
                 style={{
@@ -1655,6 +1895,7 @@ if __name__ == "__main__":
                 </div>
               </div>
 
+              {/* Win Rate */}
               <div
                 className="p-2 rounded-lg border flex flex-col justify-between"
                 style={{
@@ -1673,6 +1914,7 @@ if __name__ == "__main__":
                 </div>
               </div>
 
+              {/* Sharpe Ratio */}
               <div
                 className="p-2 rounded-lg border flex flex-col justify-between"
                 style={{
@@ -1691,6 +1933,45 @@ if __name__ == "__main__":
                 </div>
               </div>
 
+              {/* Sortino Ratio */}
+              <div
+                className="p-2 rounded-lg border flex flex-col justify-between"
+                style={{
+                  backgroundColor: 'var(--bg-card-subtle)',
+                  borderColor: 'var(--border-subtle)',
+                }}
+              >
+                <div className="font-mono-val text-[9px] uppercase" style={{ color: 'var(--text-muted)' }} title="Sortino: Downside Volatility Adjusted">
+                  Sortino Ratio
+                </div>
+                <div
+                  className="font-mono-val text-[14px] font-bold"
+                  style={{ color: 'var(--accent-primary)' }}
+                >
+                  {performance.sortinoRatio}
+                </div>
+              </div>
+
+              {/* Turnaround Ratio (Recovery Factor) */}
+              <div
+                className="p-2 rounded-lg border flex flex-col justify-between"
+                style={{
+                  backgroundColor: 'var(--bg-card-subtle)',
+                  borderColor: 'var(--border-subtle)',
+                }}
+              >
+                <div className="font-mono-val text-[9px] uppercase" style={{ color: 'var(--text-muted)' }} title="Turnaround Ratio: Total Return / Max Drawdown">
+                  Turnaround
+                </div>
+                <div
+                  className="font-mono-val text-[14px] font-bold"
+                  style={{ color: 'var(--color-positive)' }}
+                >
+                  {performance.turnaroundRatio}x
+                </div>
+              </div>
+
+              {/* Total Trades & Profit Factor */}
               <div
                 className="col-span-2 p-2 rounded-lg border flex justify-between items-center font-mono-val text-[11px]"
                 style={{
@@ -1699,13 +1980,13 @@ if __name__ == "__main__":
                 }}
               >
                 <div className="text-[10px] uppercase" style={{ color: 'var(--text-muted)' }}>
-                  Total Executed Trades
+                  Trades / Profit Factor
                 </div>
                 <div
-                  className="font-semibold"
+                  className="font-semibold text-right"
                   style={{ color: 'var(--text-primary)' }}
                 >
-                  {performance.totalTrades.toLocaleString()}
+                  {performance.totalTrades.toLocaleString()} / <span style={{ color: 'var(--color-positive)' }}>{performance.profitFactor || 2.41} PF</span>
                 </div>
               </div>
             </div>

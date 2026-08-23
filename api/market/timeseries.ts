@@ -26,50 +26,37 @@ export default async function handler(req: any, res: any) {
     const apiRes = await fetch(url);
     if (apiRes.ok) {
       const data = await apiRes.json();
+      const payload = {
+        status: 'ok',
+        source: 'ecb-frankfurter-timeseries-live',
+        ...data,
+      };
       if (res.status && typeof res.json === 'function') {
-        return res.status(200).json({
-          status: 'ok',
-          source: 'ecb-frankfurter-timeseries-live',
-          ...data,
-        });
+        return res.status(200).json(payload);
       }
-      return new Response(JSON.stringify(data), {
+      return new Response(JSON.stringify(payload), {
         status: 200,
         headers: { 'Content-Type': 'application/json' },
       });
+    } else {
+      throw new Error(`Frankfurter API returned status: ${apiRes.status}`);
     }
   } catch (e: any) {
-    console.warn('Market timeseries fetch error:', e?.message);
-  }
-
-  // Fallback synthetic time series
-  const rates: Record<string, Record<string, number>> = {};
-  const currentYear = new Date().getFullYear();
-  for (let m = 1; m <= 12; m++) {
-    const mm = m < 10 ? `0${m}` : `${m}`;
-    rates[`${currentYear}-${mm}-01`] = {
-      SGD: 1.34 + Math.sin(m * 0.5) * 0.02,
-      EUR: 0.92 + Math.cos(m * 0.4) * 0.015,
-      JPY: 155.0 + Math.sin(m * 0.8) * 3.5,
+    console.error('Market timeseries live fetch error:', e?.message);
+    const errorPayload = {
+      status: 'error',
+      message: e?.message || 'Failed to fetch live timeseries from European Central Bank / Frankfurter API',
+      start_date: startDate,
+      end_date: endDate,
+      base,
+      symbols,
     };
+    if (res.status && typeof res.json === 'function') {
+      return res.status(502).json(errorPayload);
+    }
+    return new Response(JSON.stringify(errorPayload), {
+      status: 502,
+      headers: { 'Content-Type': 'application/json' },
+    });
   }
-
-  const fallback = {
-    status: 'ok',
-    source: 'synthetic-timeseries-fallback',
-    amount: 1.0,
-    base: base,
-    start_date: startDate,
-    end_date: endDate || `${currentYear}-12-31`,
-    rates,
-  };
-
-  if (res.status && typeof res.json === 'function') {
-    return res.status(200).json(fallback);
-  }
-
-  return new Response(JSON.stringify(fallback), {
-    status: 200,
-    headers: { 'Content-Type': 'application/json' },
-  });
 }

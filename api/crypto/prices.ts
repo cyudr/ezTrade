@@ -1,5 +1,5 @@
 /**
- * Crypto Prices Aggregator Endpoint (Multi-provider with CoinGecko, Binance 24hr Feed, & MAS Pegged SGD conversion)
+ * Crypto Prices Aggregator Endpoint (Multi-provider with CoinGecko and Binance 24hr Live Feed)
  * Vercel Serverless & Express compatible handler
  * Accessible at /api/crypto/prices
  */
@@ -18,99 +18,6 @@ const COINGECKO_TO_BINANCE: Record<string, string> = {
   near: 'NEARUSDT',
   sui: 'SUIUSDT',
   pepe: 'PEPEUSDT',
-};
-
-const EXPANDED_FALLBACK: Record<string, any> = {
-  bitcoin: {
-    usd: 68450.0,
-    sgd: 92133.7,
-    usd_24h_change: 2.78,
-    sgd_24h_change: 2.82,
-    usd_24h_vol: 38500000000,
-    sgd_24h_vol: 51821000000,
-    last_updated_at: Math.floor(Date.now() / 1000),
-  },
-  ethereum: {
-    usd: 2540.0,
-    sgd: 3418.84,
-    usd_24h_change: 3.48,
-    sgd_24h_change: 3.52,
-    usd_24h_vol: 21400000000,
-    sgd_24h_vol: 28804400000,
-    last_updated_at: Math.floor(Date.now() / 1000),
-  },
-  solana: {
-    usd: 168.5,
-    sgd: 226.8,
-    usd_24h_change: 5.12,
-    sgd_24h_change: 5.16,
-    usd_24h_vol: 6800000000,
-    sgd_24h_vol: 9152800000,
-    last_updated_at: Math.floor(Date.now() / 1000),
-  },
-  'avalanche-2': {
-    usd: 26.4,
-    sgd: 35.53,
-    usd_24h_change: 1.85,
-    sgd_24h_change: 1.89,
-    usd_24h_vol: 850000000,
-    sgd_24h_vol: 1144100000,
-    last_updated_at: Math.floor(Date.now() / 1000),
-  },
-  ripple: {
-    usd: 0.584,
-    sgd: 0.786,
-    usd_24h_change: -0.42,
-    sgd_24h_change: -0.38,
-    usd_24h_vol: 1200000000,
-    sgd_24h_vol: 1615200000,
-    last_updated_at: Math.floor(Date.now() / 1000),
-  },
-  cardano: {
-    usd: 0.362,
-    sgd: 0.487,
-    usd_24h_change: 0.95,
-    sgd_24h_change: 0.98,
-    usd_24h_vol: 450000000,
-    sgd_24h_vol: 605700000,
-    last_updated_at: Math.floor(Date.now() / 1000),
-  },
-  dogecoin: {
-    usd: 0.142,
-    sgd: 0.191,
-    usd_24h_change: 4.25,
-    sgd_24h_change: 4.3,
-    usd_24h_vol: 1850000000,
-    sgd_24h_vol: 2489000000,
-    last_updated_at: Math.floor(Date.now() / 1000),
-  },
-  binancecoin: {
-    usd: 592.4,
-    sgd: 797.37,
-    usd_24h_change: 1.45,
-    sgd_24h_change: 1.48,
-    usd_24h_vol: 980000000,
-    sgd_24h_vol: 1319080000,
-    last_updated_at: Math.floor(Date.now() / 1000),
-  },
-  chainlink: {
-    usd: 11.85,
-    sgd: 15.95,
-    usd_24h_change: 2.15,
-    sgd_24h_change: 2.19,
-    usd_24h_vol: 320000000,
-    sgd_24h_vol: 430720000,
-    last_updated_at: Math.floor(Date.now() / 1000),
-  },
-  polkadot: {
-    usd: 4.25,
-    sgd: 5.72,
-    usd_24h_change: -0.85,
-    sgd_24h_change: -0.81,
-    usd_24h_vol: 210000000,
-    sgd_24h_vol: 282660000,
-    last_updated_at: Math.floor(Date.now() / 1000),
-  },
 };
 
 export default async function handler(req: any, res: any) {
@@ -132,7 +39,7 @@ export default async function handler(req: any, res: any) {
 
   const USDSGD_RATE = 1.346;
 
-  // Strategy 1: CoinGecko Primary
+  // Strategy 1: CoinGecko Primary Live API
   try {
     const headers: Record<string, string> = { Accept: 'application/json' };
     if (apiKey && apiKey.trim().length > 0) {
@@ -164,10 +71,10 @@ export default async function handler(req: any, res: any) {
       }
     }
   } catch (e: any) {
-    // Proceed to high-speed Binance 24hr ticker fallback
+    // Proceed to live Binance 24hr ticker feed
   }
 
-  // Strategy 2: Binance Live Ticker Feed Fallback
+  // Strategy 2: Binance Live Ticker Feed
   try {
     const binanceController = new AbortController();
     const binanceTimeout = setTimeout(() => binanceController.abort(), 2500);
@@ -205,8 +112,6 @@ export default async function handler(req: any, res: any) {
             sgd_24h_vol: usdVol * USDSGD_RATE,
             last_updated_at: Math.floor(Date.now() / 1000),
           };
-        } else if (EXPANDED_FALLBACK[coinId]) {
-          binanceResult[coinId] = EXPANDED_FALLBACK[coinId];
         }
       }
 
@@ -221,27 +126,22 @@ export default async function handler(req: any, res: any) {
       }
     }
   } catch (e: any) {
-    // Proceed to static fallback
+    // Both CoinGecko & Binance live endpoints unreachable
   }
 
-  // Strategy 3: Guaranteed Comprehensive Fallback
-  const finalFallback: Record<string, any> = {};
-  for (const coinId of requestedIdList) {
-    if (EXPANDED_FALLBACK[coinId]) {
-      finalFallback[coinId] = EXPANDED_FALLBACK[coinId];
-    }
-  }
-
-  if (Object.keys(finalFallback).length === 0) {
-    Object.assign(finalFallback, EXPANDED_FALLBACK);
-  }
+  // Strict API policy: Return 503 offline status when live crypto feeds are unreachable (No simulated/mock data)
+  const offlinePayload = {
+    status: 'offline',
+    message: 'Live Crypto Price Feeds (CoinGecko / Binance) Offline',
+    timestamp: new Date().toISOString(),
+  };
 
   if (res.status && typeof res.json === 'function') {
-    return res.status(200).json(finalFallback);
+    return res.status(503).json(offlinePayload);
   }
 
-  return new Response(JSON.stringify(finalFallback), {
-    status: 200,
+  return new Response(JSON.stringify(offlinePayload), {
+    status: 503,
     headers: { 'Content-Type': 'application/json' },
   });
 }

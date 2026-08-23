@@ -1,25 +1,15 @@
 import React, { createContext, useContext, useState, useEffect, useMemo, ReactNode } from 'react';
-import { fetchFrankfurterLatest } from '../services/apiService';
+import {
+  CURRENCY_OPTIONS,
+  CurrencyOption,
+  fetchLiveExchangeRates,
+  convertCurrency,
+  formatCurrencyAmount,
+  DEFAULT_CURRENCY_CODE,
+} from '../data/currencies';
 
-export interface CurrencyOption {
-  code: string;
-  symbol: string;
-  name: string;
-  flag: string;
-}
-
-export const CURRENCY_OPTIONS: CurrencyOption[] = [
-  { code: 'USD', symbol: '$', name: 'US Dollar', flag: '🇺🇸' },
-  { code: 'EUR', symbol: '€', name: 'Euro', flag: '🇪🇺' },
-  { code: 'SGD', symbol: 'S$', name: 'Singapore Dollar', flag: '🇸🇬' },
-  { code: 'GBP', symbol: '£', name: 'British Pound', flag: '🇬🇧' },
-  { code: 'JPY', symbol: '¥', name: 'Japanese Yen', flag: '🇯🇵' },
-  { code: 'CAD', symbol: 'C$', name: 'Canadian Dollar', flag: '🇨🇦' },
-  { code: 'AUD', symbol: 'A$', name: 'Australian Dollar', flag: '🇦🇺' },
-  { code: 'CHF', symbol: 'Fr', name: 'Swiss Franc', flag: '🇨🇭' },
-  { code: 'HKD', symbol: 'HK$', name: 'Hong Kong Dollar', flag: '🇭🇰' },
-  { code: 'CNY', symbol: '¥', name: 'Chinese Yuan', flag: '🇨🇳' },
-];
+export type { CurrencyOption };
+export { CURRENCY_OPTIONS };
 
 interface CurrencyContextType {
   currency: string;
@@ -88,7 +78,7 @@ export const CurrencyProvider: React.FC<{ children: ReactNode }> = ({ children }
   const refreshRates = async () => {
     setIsRatesLoading(true);
     try {
-      const fxData = await fetchFrankfurterLatest('USD', [
+      const data = await fetchLiveExchangeRates('USD', [
         'EUR',
         'SGD',
         'JPY',
@@ -99,14 +89,11 @@ export const CurrencyProvider: React.FC<{ children: ReactNode }> = ({ children }
         'CNY',
         'HKD',
       ]);
-      if (fxData && fxData.rates) {
-        setRates({
-          USD: 1.0,
-          ...fxData.rates,
-        });
+      if (data && data.rates) {
+        setRates(data.rates);
       }
     } catch (err) {
-      console.warn('Live FX rates fetch error, using live fallback ECB rates:', err);
+      console.warn('Live FX rates fetch notice:', err);
     } finally {
       setIsRatesLoading(false);
     }
@@ -119,55 +106,21 @@ export const CurrencyProvider: React.FC<{ children: ReactNode }> = ({ children }
   }, []);
 
   const convertFromUSD = (amountInUSD: number, targetCurrency?: string): number => {
-    if (typeof amountInUSD !== 'number' || isNaN(amountInUSD)) return 0;
     const target = targetCurrency || currency;
-    if (target === 'USD') return amountInUSD;
-    const rate = rates[target] || DEFAULT_RATES_FROM_USD[target] || 1.0;
-    return amountInUSD * rate;
+    return convertCurrency(amountInUSD, 'USD', target, rates);
   };
 
   const convertToUSD = (amountInTargetCurrency: number, sourceCurrency?: string): number => {
-    if (typeof amountInTargetCurrency !== 'number' || isNaN(amountInTargetCurrency)) return 0;
     const src = sourceCurrency || currency;
-    if (src === 'USD') return amountInTargetCurrency;
-    const rate = rates[src] || DEFAULT_RATES_FROM_USD[src] || 1.0;
-    return rate !== 0 ? amountInTargetCurrency / rate : amountInTargetCurrency;
+    return convertCurrency(amountInTargetCurrency, src, 'USD', rates);
   };
 
   const formatMoney = (
     amountInUSD: number,
     options?: { showCode?: boolean; decimals?: number; compact?: boolean }
   ): string => {
-    if (typeof amountInUSD !== 'number' || isNaN(amountInUSD)) return '--';
-
     const converted = convertFromUSD(amountInUSD);
-    const sym = activeCurrencyOption.symbol;
-    const code = activeCurrencyOption.code;
-
-    if (options?.compact) {
-      const absVal = Math.abs(converted);
-      let formattedNumber = '';
-      if (absVal >= 1e9) {
-        formattedNumber = (converted / 1e9).toFixed(options.decimals ?? 2) + 'B';
-      } else if (absVal >= 1e6) {
-        formattedNumber = (converted / 1e6).toFixed(options.decimals ?? 2) + 'M';
-      } else if (absVal >= 1e3) {
-        formattedNumber = (converted / 1e3).toFixed(options.decimals ?? 1) + 'K';
-      } else {
-        formattedNumber = converted.toFixed(options.decimals ?? 2);
-      }
-      return `${sym}${formattedNumber}${options?.showCode ? ' ' + code : ''}`;
-    }
-
-    const defaultDecimals = converted > 1000 ? 2 : converted < 1 ? 4 : 2;
-    const dec = options?.decimals !== undefined ? options.decimals : defaultDecimals;
-
-    const formatted = converted.toLocaleString('en-US', {
-      minimumFractionDigits: dec,
-      maximumFractionDigits: dec,
-    });
-
-    return `${sym}${formatted}${options?.showCode ? ' ' + code : ''}`;
+    return formatCurrencyAmount(converted, currency, options);
   };
 
   return (

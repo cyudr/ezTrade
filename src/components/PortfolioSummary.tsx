@@ -238,7 +238,7 @@ export const PortfolioSummary: React.FC<PortfolioSummaryProps> = ({
                       key={pos.id}
                       onClick={() => {
                         setOrderTicker(pos.ticker);
-                        setLimitPrice(pos.lastPrice.toFixed(2));
+                        setLimitPrice((pos.lastPrice > 0 ? pos.lastPrice : pos.entryPrice).toFixed(2));
                       }}
                       className="border-b transition-colors group cursor-pointer"
                       style={{ borderColor: 'var(--border-subtle)' }}
@@ -265,7 +265,7 @@ export const PortfolioSummary: React.FC<PortfolioSummaryProps> = ({
                         className="py-2.5 text-right font-semibold"
                         style={{ color: 'var(--text-primary)' }}
                       >
-                        {pos.lastPrice.toFixed(2)}
+                        {pos.lastPrice > 0 ? pos.lastPrice.toFixed(2) : pos.entryPrice.toFixed(2)}
                       </td>
                       <td
                         className="py-2.5 text-right font-semibold"
@@ -273,7 +273,7 @@ export const PortfolioSummary: React.FC<PortfolioSummaryProps> = ({
                           color: isProfit ? 'var(--color-positive)' : 'var(--color-negative)',
                         }}
                       >
-                        {isProfit ? '+' : ''}{formatMoney(pos.unrealizedPnl, 2)}
+                        {pos.lastPrice > 0 ? `${isProfit ? '+' : ''}${formatMoney(pos.unrealizedPnl)}` : '$0.00'}
                       </td>
                       <td className="py-2.5 text-right">
                         <span
