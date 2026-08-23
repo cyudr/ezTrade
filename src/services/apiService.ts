@@ -168,19 +168,9 @@ export async function fetchApiHealth(): Promise<{ status: string; uptime?: numbe
   }
 }
 
-export async function fetchLtaCarparks(): Promise<any> {
+export async function fetchTimeseriesData(symbol = 'SPX', range = '1mo'): Promise<any> {
   try {
-    const res = await fetch('/api/lta/carparks');
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    return await res.json();
-  } catch (e: any) {
-    return null;
-  }
-}
-
-export async function fetchOneMapSearch(query = 'Marina Bay'): Promise<any> {
-  try {
-    const res = await fetch(`/api/onemap/search?searchVal=${encodeURIComponent(query)}`);
+    const res = await fetch(`/api/market/timeseries?symbol=${encodeURIComponent(symbol)}&range=${encodeURIComponent(range)}`);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     return await res.json();
   } catch (e: any) {
@@ -189,46 +179,110 @@ export async function fetchOneMapSearch(query = 'Marina Bay'): Promise<any> {
 }
 
 /**
- * Transforms real Frankfurter FX and CoinGecko Crypto into live Ticker Items
+ * Fetch real-time parsed financial news articles and algorithmic sentiment from /api/market/news
+ */
+export async function fetchRealFinancialNews(): Promise<any[]> {
+  try {
+    const res = await fetch('/api/market/news');
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    return data.articles || [];
+  } catch (e: any) {
+    console.warn('Real financial news fetch notice:', e?.message);
+    return [];
+  }
+}
+
+/**
+ * 2b. Stocks & Indices - Live Market endpoint
+ */
+export async function fetchLiveStocks(): Promise<Record<string, TickerItem>> {
+  try {
+    const res = await fetch('/api/market/stocks');
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    return data.stocks || {};
+  } catch (e: any) {
+    console.warn('Live stocks fetch notice:', e?.message);
+    return {};
+  }
+}
+
+/**
+ * Transforms real Frankfurter FX, CoinGecko Crypto, and live Stock quotes into Ticker Items
  */
 export function mergeLiveDataIntoTickers(
   currentTickers: TickerItem[],
   fxData?: FrankfurterLatestResponse | null,
-  cryptoData?: CoinGeckoPriceResponse | null
+  cryptoData?: CoinGeckoPriceResponse | null,
+  stockData?: Record<string, any> | null
 ): TickerItem[] {
   const updated = [...currentTickers];
 
+  // Merge Live Stocks & Indices
+  if (stockData && Object.keys(stockData).length > 0) {
+    updated.forEach((ticker, idx) => {
+      const liveStock = stockData[ticker.symbol];
+      if (liveStock) {
+        const prevPrice = ticker.price;
+        const newPrice = liveStock.price;
+        updated[idx] = {
+          ...ticker,
+          name: liveStock.name || ticker.name,
+          price: newPrice,
+          change: liveStock.change,
+          changePct: liveStock.changePct,
+          high: liveStock.high || ticker.high,
+          low: liveStock.low || ticker.low,
+          volume: liveStock.volume || ticker.volume,
+          sparkline: liveStock.sparkline?.length ? liveStock.sparkline : ticker.sparkline,
+          lastClose: liveStock.lastClose || ticker.lastClose,
+          tickStatus: newPrice > prevPrice ? 'up' : newPrice < prevPrice ? 'down' : undefined,
+        };
+      }
+    });
+  }
+
   // Merge CoinGecko Crypto
   if (cryptoData) {
-    const cryptoMap: Record<string, string> = {
-      BTCUSD: 'bitcoin',
-      ETHUSD: 'ethereum',
-      SOLUSD: 'solana',
-      AVAXUSD: 'avalanche-2',
+    const cryptoMap: Record<string, { id: string; currency: 'usd' | 'sgd' }> = {
+      BTCUSD: { id: 'bitcoin', currency: 'usd' },
+      BTCSGD: { id: 'bitcoin', currency: 'sgd' },
+      ETHUSD: { id: 'ethereum', currency: 'usd' },
+      ETHSGD: { id: 'ethereum', currency: 'sgd' },
+      SOLUSD: { id: 'solana', currency: 'usd' },
+      SOLSGD: { id: 'solana', currency: 'sgd' },
+      AVAXUSD: { id: 'avalanche-2', currency: 'usd' },
     };
 
     updated.forEach((ticker, idx) => {
-      const coinKey = cryptoMap[ticker.symbol];
-      if (coinKey && cryptoData[coinKey]) {
-        const coin = cryptoData[coinKey];
-        const newUsd = coin.usd ?? ticker.price;
-        const changePct = coin.usd_24h_change ?? ticker.changePct;
-        const change = (newUsd * changePct) / 100;
-        const vol = coin.usd_24h_vol
-          ? `$${(coin.usd_24h_vol / 1e9).toFixed(2)}B`
+      const mapping = cryptoMap[ticker.symbol];
+      if (mapping && cryptoData[mapping.id]) {
+        const coin = cryptoData[mapping.id];
+        const isSgd = mapping.currency === 'sgd';
+        const newPrice = (isSgd ? coin.sgd : coin.usd) ?? ticker.price;
+        const changePct =
+          (isSgd ? coin.sgd_24h_change : coin.usd_24h_change) ??
+          coin.usd_24h_change ??
+          ticker.changePct;
+        const change = (newPrice * changePct) / 100;
+        const rawVol = isSgd ? coin.sgd_24h_vol : coin.usd_24h_vol;
+        const vol = rawVol
+          ? `${isSgd ? 'S$' : '$'}${(rawVol / 1e9).toFixed(2)}B`
           : ticker.volume;
 
         // Sparkline update
-        const spark = [...ticker.sparkline.slice(1), newUsd];
+        const spark = [...ticker.sparkline.slice(1), newPrice];
 
         updated[idx] = {
           ...ticker,
-          price: newUsd,
+          assetClass: 'CRYPTO',
+          price: newPrice,
           change: parseFloat(change.toFixed(2)),
           changePct: parseFloat(changePct.toFixed(2)),
           volume: vol,
           sparkline: spark,
-          tickStatus: newUsd > ticker.price ? 'up' : newUsd < ticker.price ? 'down' : undefined,
+          tickStatus: newPrice > ticker.price ? 'up' : newPrice < ticker.price ? 'down' : undefined,
         };
       }
     });
@@ -236,41 +290,57 @@ export function mergeLiveDataIntoTickers(
 
   // Merge Frankfurter FX
   if (fxData && fxData.rates) {
-    // If base is SGD: rates['USD'] gives USD per 1 SGD -> 1 USD in SGD = 1 / rates['USD']
-    // rates['EUR'] gives EUR per 1 SGD
-    // rates['JPY'] gives JPY per 1 SGD
+    // Base is SGD:
+    // rates['USD'] is USD per 1 SGD -> 1 USD in SGD is (1 / rates['USD'])
+    // rates['EUR'] is EUR per 1 SGD -> 1 EUR in SGD is (1 / rates['EUR'])
+    // rates['JPY'] is JPY per 1 SGD -> 1 SGD in JPY is rates['JPY']
     const usdPerSgd = fxData.rates['USD'];
     const eurPerSgd = fxData.rates['EUR'];
     const jpyPerSgd = fxData.rates['JPY'];
 
-    // Update or insert USDSGD, EURUSD, SGDJPY, EURSGD
-    const findOrUpdate = (
+    const updateFxTicker = (
       sym: string,
       calcPrice: number,
-      existingFallback: number
+      name: string
     ) => {
       const idx = updated.findIndex((t) => t.symbol === sym);
-      const price = calcPrice > 0 ? calcPrice : existingFallback;
-      if (idx !== -1) {
+      if (idx !== -1 && calcPrice > 0) {
         const current = updated[idx];
-        const changePct = current.changePct;
+        const prevPrice = current.price;
+        const formattedPrice = parseFloat(calcPrice.toFixed(4));
+        const diff = formattedPrice - prevPrice;
+        const change = current.change !== 0 ? current.change : diff;
+        const changePct = current.changePct !== 0 ? current.changePct : (diff / prevPrice) * 100;
+
         updated[idx] = {
           ...current,
-          price: parseFloat(price.toFixed(4)),
-          sparkline: [...current.sparkline.slice(1), price],
-          tickStatus: price > current.price ? 'up' : price < current.price ? 'down' : undefined,
+          name,
+          assetClass: 'FX',
+          price: formattedPrice,
+          change: parseFloat(change.toFixed(4)),
+          changePct: parseFloat(changePct.toFixed(2)),
+          sparkline: [...current.sparkline.slice(1), formattedPrice],
+          tickStatus: formattedPrice > prevPrice ? 'up' : formattedPrice < prevPrice ? 'down' : undefined,
         };
       }
     };
 
-    if (usdPerSgd && eurPerSgd) {
-      const eurUsd = usdPerSgd / eurPerSgd; // (USD/SGD) / (EUR/SGD) = USD/EUR -> inverse EUR/USD
-      findOrUpdate('EURUSD', eurUsd > 0 ? eurUsd : 1.0845, 1.0845);
-    }
-
     if (usdPerSgd) {
       const usdSgd = 1 / usdPerSgd;
-      findOrUpdate('USDSGD', usdSgd, 1.345);
+      updateFxTicker('USDSGD', usdSgd, 'USD / SGD Spot (ECB)');
+    }
+
+    if (usdPerSgd && eurPerSgd) {
+      // EUR/USD = (1/EUR_per_SGD) / (1/USD_per_SGD) = USD_per_SGD / EUR_per_SGD
+      const eurUsd = usdPerSgd / eurPerSgd;
+      updateFxTicker('EURUSD', eurUsd, 'EUR / USD Spot');
+
+      const eurSgd = 1 / eurPerSgd;
+      updateFxTicker('EURSGD', eurSgd, 'EUR / SGD Spot (ECB)');
+    }
+
+    if (jpyPerSgd) {
+      updateFxTicker('SGDJPY', jpyPerSgd, 'SGD / JPY Spot');
     }
   }
 

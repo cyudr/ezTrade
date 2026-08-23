@@ -33,8 +33,11 @@ import {
 import {
   fetchFrankfurterLatest,
   fetchCoinGeckoPrices,
+  fetchLiveStocks,
+  fetchRealFinancialNews,
   mergeLiveDataIntoTickers,
 } from './services/apiService';
+import { getMarketSessionForSymbol } from './utils/marketHours';
 
 export default function App() {
   const [currentTab, setCurrentTab] = useState<ScreenTab>('market');
@@ -58,10 +61,6 @@ export default function App() {
   const [watchlist, setWatchlist] = useState<WatchlistItem[]>(INITIAL_WATCHLIST);
   const [sectors, setSectors] = useState<SectorAllocation[]>(INITIAL_SECTORS);
   const [notifications, setNotifications] = useState<TerminalNotification[]>(INITIAL_NOTIFICATIONS);
-
-  // Portfolio aggregates
-  const [nav, setNav] = useState(24152890.0);
-  const [dayPnlPct, setDayPnlPct] = useState(1.24);
 
   // Modals state
   const [isNewAllocationOpen, setIsNewAllocationOpen] = useState(false);
@@ -100,15 +99,44 @@ export default function App() {
     []
   );
 
-  // Sync Live Feeds from keyless Frankfurter & CoinGecko APIs
+  // Selected research ticker & subtab state for seamless cross-navigation
+  const [selectedResearchTicker, setSelectedResearchTicker] = useState<string>('NVDA');
+  const [researchSubTab, setResearchSubTab] = useState<'TREND' | 'STATS' | 'FACTORS'>('TREND');
+
+  const handleNavigateToResearch = useCallback(
+    (symbol: string, subTab: 'TREND' | 'STATS' | 'FACTORS' = 'TREND') => {
+      setSelectedResearchTicker(symbol);
+      setResearchSubTab(subTab);
+      setCurrentTab('research');
+      addNotification(
+        'Research Trend Loaded',
+        `Inspecting technical trend interface and comparison overlays for ${symbol}`,
+        'info'
+      );
+    },
+    [addNotification]
+  );
+
+  // Portfolio aggregates
+  const [nav, setNav] = useState(24152890.0);
+  const [dayPnlPct, setDayPnlPct] = useState(1.24);
+
+  // Sync Live Feeds from real live stock endpoint, Frankfurter FX & CoinGecko Crypto
   const syncLiveMarketFeeds = useCallback(async (silent = true) => {
     setIsSyncingLiveFeeds(true);
     let fxData = null;
     let cryptoData = null;
+    let stockData = null;
+
+    try {
+      stockData = await fetchLiveStocks();
+    } catch (e) {
+      console.warn('Live stock fetch notice:', e);
+    }
 
     try {
       if (apiConfig.frankfurterEnabled) {
-        fxData = await fetchFrankfurterLatest('SGD', ['USD', 'EUR', 'JPY', 'GBP']);
+        fxData = await fetchFrankfurterLatest('USD', ['SGD', 'EUR', 'JPY', 'GBP', 'CAD', 'AUD', 'CHF', 'CNY']);
       }
     } catch (e) {
       console.warn('Live FX fetch notice:', e);
@@ -117,8 +145,8 @@ export default function App() {
     try {
       if (apiConfig.coinGeckoEnabled) {
         cryptoData = await fetchCoinGeckoPrices(
-          ['bitcoin', 'ethereum', 'solana', 'avalanche-2'],
-          ['sgd', 'usd'],
+          ['bitcoin', 'ethereum', 'solana', 'avalanche-2', 'ripple', 'cardano'],
+          ['usd', 'sgd'],
           apiConfig.coinGeckoApiKey
         );
       }
@@ -126,12 +154,43 @@ export default function App() {
       console.warn('Live Crypto fetch notice:', e);
     }
 
-    if (fxData || cryptoData) {
-      setTickers((prev) => mergeLiveDataIntoTickers(prev, fxData, cryptoData));
+    // Sync verified real-time financial news articles
+    try {
+      const realNews = await fetchRealFinancialNews();
+      if (realNews && realNews.length > 0) {
+        setSentimentFeed(realNews);
+      }
+    } catch (e) {
+      console.warn('Real financial news fetch notice:', e);
+    }
+
+    if (fxData || cryptoData || (stockData && Object.keys(stockData).length > 0)) {
+      setTickers((prev) => mergeLiveDataIntoTickers(prev, fxData, cryptoData, stockData));
+      
+      // Also sync current position values with real market quotes
+      if (stockData || cryptoData) {
+        setPositions((prev) =>
+          prev.map((pos) => {
+            const liveStock = stockData?.[pos.ticker];
+            if (liveStock) {
+              const newLast = liveStock.price;
+              const newUnrealized = (newLast - pos.entryPrice) * pos.size;
+              return {
+                ...pos,
+                lastPrice: newLast,
+                unrealizedPnl: newUnrealized,
+                tickStatus: newLast > pos.lastPrice ? 'up' : newLast < pos.lastPrice ? 'down' : undefined,
+              };
+            }
+            return pos;
+          })
+        );
+      }
+
       if (!silent) {
         addNotification(
           'Live Feeds Synchronized',
-          `Fetched European Central Bank FX (Base: SGD) and CoinGecko crypto valuations.`,
+          `Synced real-time quotes across Equities, ECB FX, and Crypto markets.`,
           'success'
         );
       }
@@ -140,61 +199,16 @@ export default function App() {
     setIsSyncingLiveFeeds(false);
   }, [apiConfig, addNotification]);
 
-  // Initial fetch and periodic 30-sec live feed polling
+  // Initial fetch and periodic 10-sec live feed polling for real live data
   useEffect(() => {
+    if (!isLiveTicking) return;
     syncLiveMarketFeeds(true);
     const feedInterval = setInterval(() => {
       syncLiveMarketFeeds(true);
-    }, 30000);
+    }, 10000);
 
     return () => clearInterval(feedInterval);
-  }, [syncLiveMarketFeeds]);
-
-  // Micro-tick simulation loop between API syncs
-  useEffect(() => {
-    if (!isLiveTicking) return;
-
-    const interval = setInterval(() => {
-      // Pick a random ticker to bump slightly
-      setTickers((prev) => {
-        const randomIndex = Math.floor(Math.random() * prev.length);
-        return prev.map((t, idx) => {
-          if (idx !== randomIndex) return { ...t, tickStatus: undefined };
-          const deltaPct = (Math.random() * 0.3 - 0.14) / 100;
-          const newPrice = Math.max(0.001, t.price * (1 + deltaPct));
-          const isUp = deltaPct >= 0;
-          return {
-            ...t,
-            price: newPrice,
-            changePct: t.changePct + deltaPct * 8,
-            tickStatus: isUp ? 'up' : 'down',
-          };
-        });
-      });
-
-      // Periodically update positions last price
-      setPositions((prev) => {
-        if (Math.random() > 0.6) {
-          const randPosIdx = Math.floor(Math.random() * prev.length);
-          return prev.map((pos, idx) => {
-            if (idx !== randPosIdx) return { ...pos, tickStatus: undefined };
-            const delta = (Math.random() * 0.4 - 0.19) / 100;
-            const newLast = Math.max(1, pos.lastPrice * (1 + delta));
-            const newUnrealized = (newLast - pos.entryPrice) * pos.size;
-            return {
-              ...pos,
-              lastPrice: newLast,
-              unrealizedPnl: newUnrealized,
-              tickStatus: delta >= 0 ? 'up' : 'down',
-            };
-          });
-        }
-        return prev;
-      });
-    }, 1200);
-
-    return () => clearInterval(interval);
-  }, [isLiveTicking]);
+  }, [syncLiveMarketFeeds, isLiveTicking]);
 
   // Global Keyboard Shortcuts
   useEffect(() => {
@@ -350,7 +364,7 @@ export default function App() {
       {/* Main Workspace Frame */}
       <main
         id="main-viewport"
-        className="flex-1 md:ml-64 pt-14 px-3 sm:px-5 lg:px-6 transition-all"
+        className="flex-1 md:ml-56 pt-14 px-3 sm:px-5 lg:px-6 transition-all"
       >
         {/* Search query highlight indicator if query present */}
         {searchQuery && (
@@ -380,14 +394,18 @@ export default function App() {
             <MarketOverview
               tickers={tickers}
               sentimentFeed={sentimentFeed}
-              onSelectTicker={(symbol) => {
-                setSearchQuery(symbol);
-                addNotification('Ticker Selected', `Inspecting real-time metrics for ${symbol}`, 'info');
-              }}
+              onSelectTicker={(symbol) => handleNavigateToResearch(symbol, 'TREND')}
+              onNavigateToResearch={(symbol) => handleNavigateToResearch(symbol, 'TREND')}
             />
           )}
 
-          {currentTab === 'research' && <ResearchTerminal />}
+          {currentTab === 'research' && (
+            <ResearchTerminal
+              selectedTicker={selectedResearchTicker}
+              initialSubTab={researchSubTab}
+              onSelectTicker={(symbol) => handleNavigateToResearch(symbol, 'TREND')}
+            />
+          )}
 
           {currentTab === 'signals' && (
             <SignalBacktest

@@ -2,27 +2,39 @@ import React, { useState } from 'react';
 import {
   TrendingUp,
   TrendingDown,
-  Rss,
   Activity,
+  Rss,
+  ExternalLink,
+  ChevronRight,
+  Sparkles,
   ArrowUpRight,
   ArrowDownRight,
-  Maximize2,
-  RefreshCw,
+  Layers,
+  Search,
+  Filter,
+  BarChart2,
+  BookOpen,
 } from 'lucide-react';
 import { TickerItem, SentimentItem } from '../types';
 import { CORRELATION_MATRICES } from '../data/mockData';
+import { getUniverseTicker } from '../data/tickerVerse';
+import { getMarketSessionForSymbol } from '../utils/marketHours';
+import { TickerVerseExplorer } from './TickerVerseExplorer';
 
 interface MarketOverviewProps {
   tickers: TickerItem[];
   sentimentFeed: SentimentItem[];
   onSelectTicker?: (symbol: string) => void;
+  onNavigateToResearch?: (symbol: string) => void;
 }
 
 export const MarketOverview: React.FC<MarketOverviewProps> = ({
   tickers,
   sentimentFeed,
   onSelectTicker,
+  onNavigateToResearch,
 }) => {
+  const [activeMarketTab, setActiveMarketTab] = useState<'OVERVIEW' | 'TICKER_VERSE'>('OVERVIEW');
   const [selectedPeriod, setSelectedPeriod] = useState<'1W' | '30D' | '90D'>('30D');
   const [activeSentimentFilter, setActiveSentimentFilter] = useState<
     'ALL' | 'HAWKISH' | 'BEARISH' | 'NEUTRAL'
@@ -32,68 +44,62 @@ export const MarketOverview: React.FC<MarketOverviewProps> = ({
   );
 
   const [selectedAssetCategory, setSelectedAssetCategory] = useState<
-    'INDICES' | 'FX_SGD' | 'CRYPTO_SGD'
-  >('INDICES');
+    'EQUITIES' | 'FX_SGD' | 'CRYPTO_SGD'
+  >('EQUITIES');
 
-  const spx = tickers.find((t) => t.symbol === 'SPX') || tickers[0];
-  const ndx = tickers.find((t) => t.symbol === 'NDX') || tickers[1];
-  const vix = tickers.find((t) => t.symbol === 'VIX') || tickers[2];
-
-  const usdSgd = tickers.find((t) => t.symbol === 'USDSGD') || {
-    symbol: 'USDSGD',
-    price: 1.342,
-    changePct: 0.05,
-    sparkline: [1.34, 1.341, 1.3415, 1.342],
-  };
-  const eurSgd = tickers.find((t) => t.symbol === 'EURSGD') || {
-    symbol: 'EURSGD',
-    price: 1.458,
-    changePct: -0.12,
-    sparkline: [1.46, 1.459, 1.4585, 1.458],
-  };
-  const sgdJpy = tickers.find((t) => t.symbol === 'SGDJPY') || {
-    symbol: 'SGDJPY',
-    price: 115.42,
-    changePct: 0.28,
-    sparkline: [115.1, 115.2, 115.35, 115.42],
+  // Handle ticker redirection
+  const handleTickerClick = (symbol: string) => {
+    if (onNavigateToResearch) {
+      onNavigateToResearch(symbol);
+    } else if (onSelectTicker) {
+      onSelectTicker(symbol);
+    }
   };
 
-  const btcSgd = tickers.find((t) => t.symbol === 'BTCSGD' || t.symbol === 'BTCUSD') || {
-    symbol: 'BTCSGD',
-    price: 128450,
-    changePct: 2.15,
-    sparkline: [126000, 127200, 128100, 128450],
+  // Helper to resolve ticker from live state or master tickerverse single source of truth
+  const getTicker = (sym: string): TickerItem => {
+    const live = tickers.find((t) => t.symbol === sym);
+    if (live) return live;
+    const fromVerse = getUniverseTicker(sym);
+    if (fromVerse) return fromVerse;
+    return {
+      symbol: sym,
+      name: `${sym} Asset`,
+      price: 100.0,
+      change: 0,
+      changePct: 0,
+      sparkline: [100, 100, 100, 100, 100],
+      assetClass: 'US_EQUITY',
+    };
   };
-  const ethSgd = tickers.find((t) => t.symbol === 'ETHSGD' || t.symbol === 'ETHUSD') || {
-    symbol: 'ETHSGD',
-    price: 4520,
-    changePct: -1.05,
-    sparkline: [4580, 4550, 4530, 4520],
-  };
-  const solSgd = tickers.find((t) => t.symbol === 'SOLSGD' || t.symbol === 'SOLUSD') || {
-    symbol: 'SOLSGD',
-    price: 242.8,
-    changePct: 4.35,
-    sparkline: [232, 236, 240, 242.8],
-  };
+
+  const spx = getTicker('SPX');
+  const ndx = getTicker('NDX');
+  const nvda = getTicker('NVDA');
+  const usdSgd = getTicker('USDSGD');
+  const eurUsd = getTicker('EURUSD');
+  const sgdJpy = getTicker('SGDJPY');
+  const btcSgd = getTicker('BTCSGD');
+  const ethSgd = getTicker('ETHSGD');
+  const btcUsd = getTicker('BTCUSD');
 
   const primaryCards =
     selectedAssetCategory === 'FX_SGD'
       ? [
-          { item: usdSgd, label: 'USD / SGD (ECB)' },
-          { item: eurSgd, label: 'EUR / SGD (ECB)' },
-          { item: sgdJpy, label: 'SGD / JPY (ECB)' },
+          { item: usdSgd, label: 'USD / SGD Spot (ECB)' },
+          { item: eurUsd, label: 'EUR / USD Interbank' },
+          { item: sgdJpy, label: 'SGD / JPY Spot' },
         ]
       : selectedAssetCategory === 'CRYPTO_SGD'
       ? [
-          { item: btcSgd, label: 'BTC / SGD' },
-          { item: ethSgd, label: 'ETH / SGD' },
-          { item: solSgd, label: 'SOL / SGD' },
+          { item: btcSgd, label: 'BTC / SGD (24/7)' },
+          { item: ethSgd, label: 'ETH / SGD (24/7)' },
+          { item: btcUsd, label: 'BTC / USD (24/7)' },
         ]
       : [
-          { item: spx, label: 'S&P 500 IDX' },
+          { item: spx, label: 'S&P 500 Index' },
           { item: ndx, label: 'NASDAQ 100' },
-          { item: vix, label: 'CBOE VIX' },
+          { item: nvda, label: 'NVIDIA (Post-Split)' },
         ];
 
   const correlationData = CORRELATION_MATRICES[selectedPeriod];
@@ -103,7 +109,6 @@ export const MarketOverview: React.FC<MarketOverviewProps> = ({
     return item.sentiment === activeSentimentFilter;
   });
 
-  // Helper for subtle correlation cell style
   const getCellStyle = (val: number): React.CSSProperties => {
     if (val === 1.0) {
       return {
@@ -161,12 +166,14 @@ export const MarketOverview: React.FC<MarketOverviewProps> = ({
         <div className="ticker-animation flex items-center">
           {tickers.concat(tickers).map((t, idx) => {
             const isPos = t.changePct >= 0;
+            const session = getMarketSessionForSymbol(t.symbol);
             return (
               <span
                 key={`${t.symbol}-${idx}`}
-                onClick={() => onSelectTicker && onSelectTicker(t.symbol)}
-                className="inline-flex items-center mx-3 gap-1.5 cursor-pointer transition-colors"
+                onClick={() => handleTickerClick(t.symbol)}
+                className="inline-flex items-center mx-3 gap-1.5 cursor-pointer transition-colors hover:underline"
                 style={{ color: 'var(--text-secondary)' }}
+                title={`Click to inspect ${t.symbol} in Research Terminal`}
               >
                 <span className="font-bold" style={{ color: 'var(--text-muted)' }}>
                   {t.symbol}
@@ -187,432 +194,448 @@ export const MarketOverview: React.FC<MarketOverviewProps> = ({
                 >
                   {isPos ? `+${t.changePct.toFixed(2)}%` : `${t.changePct.toFixed(2)}%`}
                 </span>
+                {!session.isOpen && session.assetClass !== 'CRYPTO' && (
+                  <span
+                    className="text-[9px] px-1 py-0.2 rounded font-medium opacity-60 uppercase"
+                    style={{ backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-subtle)' }}
+                  >
+                    Close
+                  </span>
+                )}
               </span>
             );
           })}
         </div>
       </div>
 
-      {/* Main Grid Canvas */}
-      <div className="grid grid-cols-12 gap-3">
-        {/* Primary Benchmark / FX / Crypto Cards Row */}
-        <div className="col-span-12 lg:col-span-8 flex flex-col gap-2">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-1.5 font-mono-val text-[11px]">
-              <span style={{ color: 'var(--text-muted)' }} className="font-semibold">
-                ASSET FEED:
-              </span>
-              {(
-                [
-                  { id: 'INDICES', label: 'Global Indices' },
-                  { id: 'FX_SGD', label: 'SGD Forex (ECB)' },
-                  { id: 'CRYPTO_SGD', label: 'SGD Crypto' },
-                ] as const
-              ).map((cat) => {
-                const isSelected = selectedAssetCategory === cat.id;
-                return (
-                  <button
-                    key={cat.id}
-                    onClick={() => setSelectedAssetCategory(cat.id)}
-                    className="px-2.5 py-1 rounded-md text-[11px] font-medium transition-all cursor-pointer"
-                    style={{
-                      backgroundColor: isSelected ? 'var(--accent-subtle)' : 'var(--bg-card)',
-                      color: isSelected ? 'var(--accent-text)' : 'var(--text-secondary)',
-                      border: isSelected
-                        ? '1px solid var(--accent-primary)'
-                        : '1px solid var(--border-subtle)',
-                      fontWeight: isSelected ? 600 : 400,
-                    }}
-                  >
-                    {cat.label}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
+      {/* Main Mode Switcher: Matrix vs 500+ Universe (Subtle Outline Selection Bar) */}
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2.5 pb-1">
+        <div
+          className="flex items-center p-0.5 rounded-lg border"
+          style={{ backgroundColor: 'var(--bg-card-subtle)', borderColor: 'var(--border-subtle)' }}
+        >
+          <button
+            onClick={() => setActiveMarketTab('OVERVIEW')}
+            className={`px-3.5 py-1.5 rounded-md text-xs font-mono-val font-semibold flex items-center gap-2 cursor-pointer transition-all ${
+              activeMarketTab === 'OVERVIEW' ? 'shadow-xs' : 'opacity-70 hover:opacity-100'
+            }`}
+            style={{
+              backgroundColor: activeMarketTab === 'OVERVIEW' ? 'var(--accent-subtle)' : 'transparent',
+              borderColor: activeMarketTab === 'OVERVIEW' ? 'var(--accent-primary)' : 'transparent',
+              borderWidth: '1px',
+              borderStyle: 'solid',
+              color: activeMarketTab === 'OVERVIEW' ? 'var(--accent-text)' : 'var(--text-secondary)',
+            }}
+          >
+            <Activity className="w-3.5 h-3.5" />
+            <span>Benchmark Matrix & Sentiment</span>
+          </button>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-            {primaryCards.map((card, idx) => {
-              const item = card.item;
-              const isUp = item.changePct >= 0;
-              return (
-                <div
-                  key={`${item.symbol}-${idx}`}
-                  id={`card-${item.symbol.toLowerCase()}`}
-                  className="bento-card bento-card-interactive rounded-xl p-3.5 flex flex-col justify-between h-[155px] relative overflow-hidden group cursor-pointer transition-all"
-                  onClick={() => onSelectTicker && onSelectTicker(item.symbol)}
-                >
-                  <div className="flex justify-between items-center mb-1">
-                    <span
-                      className="font-mono-val text-[11px] font-semibold tracking-wide uppercase truncate"
-                      style={{ color: 'var(--text-muted)' }}
-                    >
-                      {card.label}
-                    </span>
-                    <span
-                      className="w-1.5 h-1.5 rounded-full"
-                      style={{
-                        backgroundColor: isUp ? 'var(--color-positive)' : 'var(--color-negative)',
-                      }}
-                    />
-                  </div>
-
-                  <div className="flex justify-between items-baseline mb-2">
-                    <div
-                      className={`font-mono-val text-[21px] font-bold tracking-tight ${
-                        item.tickStatus ? `tick-${item.tickStatus}` : ''
-                      }`}
-                      style={{ color: 'var(--text-primary)' }}
-                    >
-                      {item.price > 1000
-                        ? item.price.toLocaleString('en-US', { minimumFractionDigits: 2 })
-                        : item.price.toFixed(item.price < 10 ? 4 : 2)}
-                    </div>
-                    <div
-                      className="font-mono-val text-[11px] px-2 py-0.5 rounded-md flex items-center gap-1 font-semibold"
-                      style={{
-                        backgroundColor: isUp
-                          ? 'var(--color-positive-bg)'
-                          : 'var(--color-negative-bg)',
-                        color: isUp ? 'var(--color-positive)' : 'var(--color-negative)',
-                        border: `1px solid ${
-                          isUp ? 'var(--color-positive-border)' : 'var(--color-negative-border)'
-                        }`,
-                      }}
-                    >
-                      {isUp ? (
-                        <ArrowUpRight className="w-3.5 h-3.5" />
-                      ) : (
-                        <ArrowDownRight className="w-3.5 h-3.5" />
-                      )}
-                      {isUp ? `+${item.changePct.toFixed(2)}%` : `${item.changePct.toFixed(2)}%`}
-                    </div>
-                  </div>
-
-                  {/* Subtle Sparkline SVG */}
-                  <div
-                    className="mt-auto h-11 w-full rounded-lg relative overflow-hidden transition-colors"
-                    style={{
-                      backgroundColor: 'var(--bg-card-subtle)',
-                      border: '1px solid var(--border-subtle)',
-                    }}
-                  >
-                    <svg
-                      className="absolute inset-0 h-full w-full opacity-80"
-                      viewBox="0 0 100 40"
-                      preserveAspectRatio="none"
-                    >
-                      <polyline
-                        fill="none"
-                        points={
-                          isUp
-                            ? '0,30 15,28 30,34 50,18 70,22 85,12 100,6'
-                            : '0,10 18,14 35,8 55,26 75,20 90,32 100,35'
-                        }
-                        stroke={isUp ? 'var(--color-positive)' : 'var(--color-negative)'}
-                        strokeWidth="1.75"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        vectorEffect="non-scaling-stroke"
-                      />
-                    </svg>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
+          <button
+            onClick={() => setActiveMarketTab('TICKER_VERSE')}
+            className={`px-3.5 py-1.5 rounded-md text-xs font-mono-val font-semibold flex items-center gap-2 cursor-pointer transition-all ${
+              activeMarketTab === 'TICKER_VERSE' ? 'shadow-xs' : 'opacity-70 hover:opacity-100'
+            }`}
+            style={{
+              backgroundColor: activeMarketTab === 'TICKER_VERSE' ? 'var(--accent-subtle)' : 'transparent',
+              borderColor: activeMarketTab === 'TICKER_VERSE' ? 'var(--accent-primary)' : 'transparent',
+              borderWidth: '1px',
+              borderStyle: 'solid',
+              color: activeMarketTab === 'TICKER_VERSE' ? 'var(--accent-text)' : 'var(--text-secondary)',
+            }}
+          >
+            <Layers className="w-3.5 h-3.5" />
+            <span>500+ Ticker Universe (Multi-Sector)</span>
+          </button>
         </div>
 
-        {/* Live Sentiment Feed (Right column) */}
-        <div
-          id="sentiment-panel"
-          className="col-span-12 lg:col-span-4 bento-card rounded-xl p-3.5 flex flex-col h-[400px]"
-        >
-          <div
-            className="flex justify-between items-center mb-3 pb-2 border-b"
-            style={{ borderColor: 'var(--border-subtle)' }}
+        {/* Live Indicator pill */}
+        <div className="flex items-center gap-2 text-xs font-mono-val">
+          <span
+            className="flex items-center gap-1.5 px-2.5 py-1 rounded-md border"
+            style={{
+              backgroundColor: 'var(--bg-card-subtle)',
+              borderColor: 'var(--border-subtle)',
+              color: 'var(--text-secondary)',
+            }}
           >
-            <div className="flex items-center gap-2">
-              <Rss className="w-4 h-4" style={{ color: 'var(--accent-primary)' }} />
-              <h2
-                className="font-mono-val text-[12px] font-bold uppercase tracking-wider"
-                style={{ color: 'var(--text-primary)' }}
+            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+            <span>Live Latency: <strong>14ms</strong></span>
+          </span>
+        </div>
+      </div>
+
+      {/* VIEW A: BENCHMARK MATRIX & LIVE SENTIMENT */}
+      {activeMarketTab === 'OVERVIEW' && (
+        <div className="grid grid-cols-12 gap-3 min-h-[640px]">
+          {/* Top 3 Benchmark Primary Cards (Left column, span 8) */}
+          <div className="col-span-12 lg:col-span-8 flex flex-col gap-3">
+            {/* Asset Selector Segment Bar (Subtle Outline Style) */}
+            <div className="flex items-center justify-between">
+              <div
+                className="flex items-center p-0.5 rounded-lg border font-mono-val text-xs"
+                style={{ backgroundColor: 'var(--bg-card-subtle)', borderColor: 'var(--border-subtle)' }}
               >
-                Sentiment Feed
-              </h2>
+                {[
+                  { key: 'EQUITIES', label: 'US Equities & Indices' },
+                  { key: 'FX_SGD', label: 'SGD Forex (ECB)' },
+                  { key: 'CRYPTO_SGD', label: '24/7 Crypto' },
+                ].map((tab) => {
+                  const isSelected = selectedAssetCategory === tab.key;
+                  return (
+                    <button
+                      key={tab.key}
+                      onClick={() => setSelectedAssetCategory(tab.key as any)}
+                      className={`px-3 py-1 rounded-md font-medium cursor-pointer transition-all ${
+                        isSelected ? 'font-bold' : 'opacity-70 hover:opacity-100'
+                      }`}
+                      style={{
+                        backgroundColor: isSelected ? 'var(--accent-subtle)' : 'transparent',
+                        borderColor: isSelected ? 'var(--accent-primary)' : 'transparent',
+                        borderWidth: '1px',
+                        borderStyle: 'solid',
+                        color: isSelected ? 'var(--accent-text)' : 'var(--text-secondary)',
+                      }}
+                    >
+                      {tab.label}
+                    </button>
+                  );
+                })}
+              </div>
+
+              <span className="text-[11px] font-mono-val hidden sm:inline" style={{ color: 'var(--text-muted)' }}>
+                Click any asset to open Research Trend View
+              </span>
             </div>
-            <div className="flex gap-1 text-[10px] font-mono-val">
-              {(['ALL', 'HAWKISH', 'BEARISH'] as const).map((filter) => {
-                const isSelected = activeSentimentFilter === filter;
+
+            {/* Benchmark Cards Grid */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              {primaryCards.map(({ item, label }) => {
+                const isUp = item.changePct >= 0;
+                const session = getMarketSessionForSymbol(item.symbol);
+
                 return (
-                  <button
-                    key={filter}
-                    onClick={() => setActiveSentimentFilter(filter)}
-                    className="px-2 py-0.5 rounded text-[10px] font-semibold cursor-pointer uppercase transition-all"
-                    style={{
-                      backgroundColor: isSelected ? 'var(--accent-subtle)' : 'transparent',
-                      color: isSelected ? 'var(--accent-text)' : 'var(--text-muted)',
-                      border: isSelected
-                        ? '1px solid var(--accent-primary)'
-                        : '1px solid transparent',
-                    }}
+                  <div
+                    key={item.symbol}
+                    onClick={() => handleTickerClick(item.symbol)}
+                    className="bento-card rounded-xl p-3.5 flex flex-col justify-between cursor-pointer transition-all hover:scale-[1.015] hover:border-blue-500/50"
+                    style={{ borderColor: 'var(--border-subtle)' }}
+                    title={`Click to open Research Terminal for ${item.symbol}`}
                   >
-                    {filter}
-                  </button>
+                    <div className="flex justify-between items-start mb-2">
+                      <div>
+                        <div className="flex items-center gap-1.5">
+                          <span
+                            className="font-mono-val text-sm font-bold tracking-tight"
+                            style={{ color: 'var(--text-primary)' }}
+                          >
+                            {item.symbol}
+                          </span>
+                          <span
+                            className="text-[9px] font-mono-val px-1.5 py-0.2 rounded font-semibold uppercase"
+                            style={{
+                              backgroundColor: 'var(--bg-card-subtle)',
+                              color: 'var(--text-muted)',
+                              border: '1px solid var(--border-subtle)',
+                            }}
+                          >
+                            {session.statusLabel}
+                          </span>
+                        </div>
+                        <div className="text-[11px] truncate max-w-[140px]" style={{ color: 'var(--text-secondary)' }}>
+                          {label}
+                        </div>
+                      </div>
+
+                      <div
+                        className="p-1 rounded-md text-[10px] font-mono-val font-semibold flex items-center gap-0.5 border"
+                        style={{
+                          backgroundColor: isUp ? 'var(--color-positive-bg)' : 'var(--color-negative-bg)',
+                          color: isUp ? 'var(--color-positive)' : 'var(--color-negative)',
+                          borderColor: isUp ? 'var(--color-positive-border)' : 'var(--color-negative-border)',
+                        }}
+                      >
+                        {isUp ? <ArrowUpRight className="w-3 h-3" /> : <ArrowDownRight className="w-3 h-3" />}
+                        {isUp ? `+${item.changePct.toFixed(2)}%` : `${item.changePct.toFixed(2)}%`}
+                      </div>
+                    </div>
+
+                    {/* Price Quote */}
+                    <div className="my-1.5">
+                      <span className="font-mono-val text-lg font-bold" style={{ color: 'var(--text-primary)' }}>
+                        ${item.price > 100 ? item.price.toLocaleString('en-US', { minimumFractionDigits: 2 }) : item.price.toFixed(4)}
+                      </span>
+                      <div className="text-[11px] font-mono-val" style={{ color: 'var(--text-muted)' }}>
+                        {item.change >= 0 ? '+' : ''}${item.change.toFixed(2)} today
+                      </div>
+                    </div>
+
+                    {/* Sparkline */}
+                    <div
+                      className="mt-2 h-9 w-full rounded relative overflow-hidden"
+                      style={{
+                        backgroundColor: 'var(--bg-card-subtle)',
+                        border: '1px solid var(--border-subtle)',
+                      }}
+                    >
+                      <svg className="absolute inset-0 h-full w-full opacity-80" viewBox="0 0 100 35" preserveAspectRatio="none">
+                        <polyline
+                          fill="none"
+                          points={
+                            isUp
+                              ? '0,28 15,24 30,30 50,16 70,20 85,10 100,4'
+                              : '0,8 18,12 35,6 55,24 75,18 90,28 100,32'
+                          }
+                          stroke={isUp ? 'var(--color-positive)' : 'var(--color-negative)'}
+                          strokeWidth="2"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        />
+                      </svg>
+                    </div>
+                  </div>
                 );
               })}
             </div>
+
+            {/* Cross-Asset Correlation Heatmap (Bottom-Left) */}
+            <div
+              id="correlation-panel"
+              className="bento-card rounded-xl p-3.5 flex flex-col flex-1"
+            >
+              <div
+                className="flex justify-between items-center mb-3 pb-2 border-b"
+                style={{ borderColor: 'var(--border-subtle)' }}
+              >
+                <div className="flex items-center gap-2">
+                  <Activity className="w-4 h-4" style={{ color: 'var(--accent-primary)' }} />
+                  <h2
+                    className="font-mono-val text-[12px] font-bold uppercase tracking-wider"
+                    style={{ color: 'var(--text-primary)' }}
+                  >
+                    Cross-Asset Correlation ({selectedPeriod})
+                  </h2>
+                </div>
+                <div className="flex gap-1">
+                  {(['1W', '30D', '90D'] as const).map((period) => {
+                    const isSelected = selectedPeriod === period;
+                    return (
+                      <button
+                        key={period}
+                        onClick={() => setSelectedPeriod(period)}
+                        className="font-mono-val text-[11px] px-2.5 py-1 rounded-md transition-all cursor-pointer border"
+                        style={{
+                          backgroundColor: isSelected ? 'var(--accent-subtle)' : 'transparent',
+                          borderColor: isSelected ? 'var(--accent-primary)' : 'var(--border-subtle)',
+                          color: isSelected ? 'var(--accent-text)' : 'var(--text-secondary)',
+                          fontWeight: isSelected ? 600 : 400,
+                        }}
+                      >
+                        {period}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Heatmap Grid */}
+              <div className="overflow-x-auto custom-scrollbar">
+                <table className="w-full text-center font-mono-val text-xs">
+                  <thead>
+                    <tr>
+                      <th className="p-1 text-left" style={{ color: 'var(--text-muted)' }}>
+                        ASSET
+                      </th>
+                      {correlationData.assets.map((asset) => (
+                        <th
+                          key={asset}
+                          onClick={() => handleTickerClick(asset)}
+                          className="p-1 font-bold cursor-pointer hover:underline"
+                          style={{ color: 'var(--text-primary)' }}
+                        >
+                          {asset}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {correlationData.assets.map((rowAsset, rIdx) => (
+                      <tr key={rowAsset}>
+                        <td
+                          onClick={() => handleTickerClick(rowAsset)}
+                          className="p-1.5 text-left font-bold cursor-pointer hover:underline"
+                          style={{ color: 'var(--text-primary)' }}
+                        >
+                          {rowAsset}
+                        </td>
+                        {correlationData.matrix[rIdx].map((val, cIdx) => {
+                          const colAsset = correlationData.assets[cIdx];
+                          return (
+                            <td
+                              key={`${rowAsset}-${colAsset}`}
+                              style={getCellStyle(val)}
+                              className="p-1.5 rounded-sm border border-black/5 dark:border-white/5 transition-all hover:scale-105"
+                              title={`${rowAsset} vs ${colAsset}: ${val.toFixed(2)}`}
+                            >
+                              {val.toFixed(2)}
+                            </td>
+                          );
+                        })}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
           </div>
 
-          <div className="flex-1 overflow-y-auto pr-1 space-y-2.5 custom-scrollbar">
-            {filteredSentiment.map((item) => {
-              const isHawk = item.sentiment === 'HAWKISH';
-              const isBear = item.sentiment === 'BEARISH';
-              return (
-                <div
-                  key={item.id}
-                  className="p-2.5 rounded-lg border transition-all"
-                  style={{
-                    backgroundColor: 'var(--bg-card-subtle)',
-                    borderColor: 'var(--border-subtle)',
-                  }}
+          {/* Right Column: Live Sentiment Feed (TOP 5 VISIBLE, SCROLLABLE CONTAINER) */}
+          <div
+            id="sentiment-panel"
+            className="col-span-12 lg:col-span-4 bento-card rounded-xl p-3.5 flex flex-col h-[560px]"
+          >
+            <div
+              className="flex justify-between items-center mb-2 pb-2 border-b"
+              style={{ borderColor: 'var(--border-subtle)' }}
+            >
+              <div className="flex items-center gap-2">
+                <Rss className="w-4 h-4" style={{ color: 'var(--accent-primary)' }} />
+                <h2
+                  className="font-mono-val text-[12px] font-bold uppercase tracking-wider"
+                  style={{ color: 'var(--text-primary)' }}
                 >
-                  <div className="flex justify-between items-center mb-1.5">
-                    <span className="font-mono-val text-[10px]" style={{ color: 'var(--text-muted)' }}>
-                      {item.time}
-                    </span>
-                    <div className="flex items-center gap-2">
-                      <div
-                        className="h-1.5 w-14 rounded-full overflow-hidden"
-                        style={{ backgroundColor: 'var(--bg-card)' }}
-                      >
-                        <div
-                          className="h-full transition-all"
+                  Live Sentiment Feed
+                </h2>
+              </div>
+              <div className="flex gap-1 text-[10px] font-mono-val">
+                {(['ALL', 'HAWKISH', 'BEARISH'] as const).map((filter) => {
+                  const isSelected = activeSentimentFilter === filter;
+                  return (
+                    <button
+                      key={filter}
+                      onClick={() => setActiveSentimentFilter(filter)}
+                      className="px-2 py-0.5 rounded text-[10px] font-semibold cursor-pointer uppercase transition-all border"
+                      style={{
+                        backgroundColor: isSelected ? 'var(--accent-subtle)' : 'transparent',
+                        color: isSelected ? 'var(--accent-text)' : 'var(--text-muted)',
+                        borderColor: isSelected ? 'var(--accent-primary)' : 'transparent',
+                      }}
+                    >
+                      {filter}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Feed Items Container: Top 5 visible, rest accessible via smooth scrolling */}
+            <div className="flex-1 overflow-y-auto pr-1 space-y-2 custom-scrollbar max-h-[480px]">
+              {filteredSentiment.map((item, idx) => {
+                const isHawk = item.sentiment === 'HAWKISH';
+                const isBear = item.sentiment === 'BEARISH';
+                return (
+                  <div
+                    key={item.id}
+                    className="p-2.5 rounded-lg border transition-all hover:border-blue-500/40"
+                    style={{
+                      backgroundColor: 'var(--bg-card-subtle)',
+                      borderColor: 'var(--border-subtle)',
+                    }}
+                  >
+                    <div className="flex justify-between items-center mb-1">
+                      <span className="font-mono-val text-[10px]" style={{ color: 'var(--text-muted)' }}>
+                        #{idx + 1} • {item.time}
+                      </span>
+                      <div className="flex items-center gap-1.5">
+                        <span
+                          className="font-mono-val text-[9px] px-1.5 py-0.2 rounded font-semibold uppercase"
                           style={{
-                            width: `${item.score}%`,
                             backgroundColor: isHawk
+                              ? 'var(--color-positive-bg)'
+                              : isBear
+                              ? 'var(--color-negative-bg)'
+                              : 'var(--color-neutral-badge-bg)',
+                            color: isHawk
                               ? 'var(--color-positive)'
                               : isBear
                               ? 'var(--color-negative)'
-                              : 'var(--text-muted)',
+                              : 'var(--color-neutral-badge-text)',
+                            border: `1px solid ${
+                              isHawk
+                                ? 'var(--color-positive-border)'
+                                : isBear
+                                ? 'var(--color-negative-border)'
+                                : 'var(--border-subtle)'
+                            }`,
                           }}
-                        />
+                        >
+                          {item.sentiment} ({item.score}%)
+                        </span>
                       </div>
-                      <span
-                        className="font-mono-val text-[10px] font-semibold"
-                        style={{ color: 'var(--text-secondary)' }}
+                    </div>
+
+                    {/* Exact Article Link Headline */}
+                    <a
+                      href={item.sourceUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-[11px] font-medium leading-snug hover:underline block my-1"
+                      style={{ color: 'var(--text-primary)' }}
+                      title={`Read full article on ${item.source}`}
+                    >
+                      {item.headline}
+                    </a>
+
+                    <div
+                      className="flex flex-wrap items-center justify-between gap-1.5 mt-1.5 pt-1.5 border-t"
+                      style={{ borderColor: 'var(--border-subtle)' }}
+                    >
+                      <div className="flex items-center gap-1">
+                        {item.tags.map((t) => (
+                          <span
+                            key={t}
+                            className="font-mono-val text-[9px] px-1 rounded uppercase"
+                            style={{
+                              color: 'var(--text-muted)',
+                              border: '1px solid var(--border-subtle)',
+                            }}
+                          >
+                            {t}
+                          </span>
+                        ))}
+                      </div>
+
+                      {/* Direct External Article Link Button */}
+                      <a
+                        href={item.sourceUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center gap-1 text-[10px] font-mono-val font-semibold px-2 py-0.5 rounded border transition-colors hover:opacity-100 opacity-90"
+                        style={{
+                          backgroundColor: 'var(--accent-subtle)',
+                          borderColor: 'var(--accent-primary)',
+                          color: 'var(--accent-text)',
+                        }}
+                        title={`Open exact permalink: ${item.sourceUrl}`}
                       >
-                        {item.score}%
-                      </span>
+                        <span>{item.source}</span>
+                        <ExternalLink className="w-2.5 h-2.5" />
+                      </a>
                     </div>
                   </div>
-
-                  <p
-                    className="text-[12px] font-medium leading-snug"
-                    style={{ color: 'var(--text-primary)' }}
-                  >
-                    {item.headline}
-                  </p>
-
-                  <div className="flex gap-1.5 mt-2">
-                    <span
-                      className="font-mono-val text-[9px] px-1.5 py-0.5 rounded font-semibold uppercase"
-                      style={{
-                        backgroundColor: isHawk
-                          ? 'var(--color-positive-bg)'
-                          : isBear
-                          ? 'var(--color-negative-bg)'
-                          : 'var(--color-neutral-badge-bg)',
-                        color: isHawk
-                          ? 'var(--color-positive)'
-                          : isBear
-                          ? 'var(--color-negative)'
-                          : 'var(--color-neutral-badge-text)',
-                        border: `1px solid ${
-                          isHawk
-                            ? 'var(--color-positive-border)'
-                            : isBear
-                            ? 'var(--color-negative-border)'
-                            : 'var(--border-subtle)'
-                        }`,
-                      }}
-                    >
-                      {item.sentiment}
-                    </span>
-                    {item.tags.slice(1).map((t) => (
-                      <span
-                        key={t}
-                        className="font-mono-val text-[9px] px-1.5 py-0.5 rounded uppercase"
-                        style={{
-                          color: 'var(--text-muted)',
-                          border: '1px solid var(--border-subtle)',
-                        }}
-                      >
-                        {t}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-
-        {/* Cross-Asset Correlation Heatmap (Bottom-Left) */}
-        <div
-          id="correlation-panel"
-          className="col-span-12 lg:col-span-8 bento-card rounded-xl p-3.5 min-h-[360px] flex flex-col -mt-3 lg:-mt-24"
-        >
-          <div
-            className="flex justify-between items-center mb-3 pb-2 border-b"
-            style={{ borderColor: 'var(--border-subtle)' }}
-          >
-            <div className="flex items-center gap-2">
-              <Activity className="w-4 h-4" style={{ color: 'var(--accent-primary)' }} />
-              <h2
-                className="font-mono-val text-[12px] font-bold uppercase tracking-wider"
-                style={{ color: 'var(--text-primary)' }}
-              >
-                Cross-Asset Correlation ({selectedPeriod})
-              </h2>
-            </div>
-            <div className="flex gap-1">
-              {(['1W', '30D', '90D'] as const).map((period) => {
-                const isSelected = selectedPeriod === period;
-                return (
-                  <button
-                    key={period}
-                    onClick={() => setSelectedPeriod(period)}
-                    className="font-mono-val text-[11px] px-2.5 py-1 rounded-md transition-all cursor-pointer"
-                    style={{
-                      backgroundColor: isSelected ? 'var(--accent-subtle)' : 'var(--bg-card-subtle)',
-                      color: isSelected ? 'var(--accent-text)' : 'var(--text-secondary)',
-                      border: isSelected
-                        ? '1px solid var(--accent-primary)'
-                        : '1px solid var(--border-subtle)',
-                      fontWeight: isSelected ? 600 : 400,
-                    }}
-                  >
-                    {period}
-                  </button>
                 );
               })}
             </div>
           </div>
-
-          <div className="flex-1 overflow-x-auto">
-            <div className="min-w-[480px]">
-              <div
-                className="grid grid-cols-6 gap-[1px] rounded-lg overflow-hidden border"
-                style={{
-                  backgroundColor: 'var(--border-subtle)',
-                  borderColor: 'var(--border-subtle)',
-                }}
-              >
-                {/* Header Row */}
-                <div
-                  className="p-2.5 font-mono-val text-[11px] font-bold"
-                  style={{
-                    backgroundColor: 'var(--bg-card-subtle)',
-                    color: 'var(--text-muted)',
-                  }}
-                >
-                  ASSET
-                </div>
-                {correlationData.assets.map((asset) => (
-                  <div
-                    key={asset}
-                    className="p-2.5 text-center font-mono-val text-[11px] font-bold uppercase"
-                    style={{
-                      backgroundColor: 'var(--bg-card-subtle)',
-                      color: 'var(--text-secondary)',
-                    }}
-                  >
-                    {asset}
-                  </div>
-                ))}
-
-                {/* Data Rows */}
-                {correlationData.assets.map((rowAsset, rowIdx) => (
-                  <React.Fragment key={rowAsset}>
-                    <div
-                      className="p-2.5 text-right font-mono-val text-[11px] font-bold flex items-center justify-end"
-                      style={{
-                        backgroundColor: 'var(--bg-card-subtle)',
-                        color: 'var(--text-secondary)',
-                      }}
-                    >
-                      {rowAsset}
-                    </div>
-                    {correlationData.matrix[rowIdx].map((val, colIdx) => {
-                      const colAsset = correlationData.assets[colIdx];
-                      return (
-                        <div
-                          key={`${rowAsset}-${colAsset}`}
-                          onMouseEnter={() => setHoveredCell({ row: rowAsset, col: colAsset, val })}
-                          onMouseLeave={() => setHoveredCell(null)}
-                          style={getCellStyle(val)}
-                          className="p-2.5 text-center font-mono-val text-[11px] flex items-center justify-center transition-all cursor-crosshair hover:ring-1 hover:ring-offset-1"
-                        >
-                          {val === 1.0 ? '1.00' : val > 0 ? `+${val.toFixed(2)}` : val.toFixed(2)}
-                        </div>
-                      );
-                    })}
-                  </React.Fragment>
-                ))}
-              </div>
-
-              {/* Correlation Inspector Footer */}
-              <div
-                className="mt-3 flex justify-between items-center text-[11px] font-mono-val px-1"
-                style={{ color: 'var(--text-muted)' }}
-              >
-                <div>
-                  {hoveredCell ? (
-                    <span>
-                      Pair:{' '}
-                      <strong style={{ color: 'var(--text-primary)' }}>
-                        {hoveredCell.row} / {hoveredCell.col}
-                      </strong>{' '}
-                      | r ={' '}
-                      <strong
-                        style={{
-                          color:
-                            hoveredCell.val > 0.3
-                              ? 'var(--color-positive)'
-                              : hoveredCell.val < -0.3
-                              ? 'var(--color-negative)'
-                              : 'var(--text-primary)',
-                        }}
-                      >
-                        {hoveredCell.val.toFixed(2)}
-                      </strong>
-                    </span>
-                  ) : (
-                    <span>Hover over any correlation pair for statistical breakdown</span>
-                  )}
-                </div>
-                <div className="flex items-center gap-3 text-[10px]">
-                  <span className="flex items-center gap-1">
-                    <span
-                      className="w-2 h-2 rounded-sm"
-                      style={{ backgroundColor: 'var(--color-negative)' }}
-                    />{' '}
-                    Inverse
-                  </span>
-                  <span className="flex items-center gap-1">
-                    <span
-                      className="w-2 h-2 rounded-sm"
-                      style={{ backgroundColor: 'var(--color-positive)' }}
-                    />{' '}
-                    Correlated
-                  </span>
-                </div>
-              </div>
-            </div>
-          </div>
         </div>
-      </div>
+      )}
+
+      {/* VIEW B: 500+ TICKER UNIVERSE EXPLORER */}
+      {activeMarketTab === 'TICKER_VERSE' && (
+        <TickerVerseExplorer
+          onSelectTicker={(ticker) => handleTickerClick(ticker.symbol)}
+        />
+      )}
     </div>
   );
 };

@@ -16,6 +16,8 @@ import {
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { PositionItem, WatchlistItem, SectorAllocation } from '../types';
+import { useCurrency } from '../context/CurrencyContext';
+import { getUniverseTicker } from '../data/tickerVerse';
 
 interface PortfolioSummaryProps {
   positions: PositionItem[];
@@ -44,6 +46,7 @@ export const PortfolioSummary: React.FC<PortfolioSummaryProps> = ({
   onOpenNewAllocation,
   onExportCsv,
 }) => {
+  const { formatMoney, currencySymbol } = useCurrency();
   const [orderSide, setOrderSide] = useState<'BUY' | 'SELL'>('BUY');
   const [orderTicker, setOrderTicker] = useState('AMD');
   const [orderQty, setOrderQty] = useState(1000);
@@ -87,15 +90,12 @@ export const PortfolioSummary: React.FC<PortfolioSummaryProps> = ({
   const handleSelectFromWatchlist = (item: WatchlistItem) => {
     setOrderTicker(item.ticker);
     setOrderSide(item.signal === 'SELL' ? 'SELL' : 'BUY');
-    setLimitPrice(
-      item.ticker === 'AMD'
-        ? '165.50'
-        : item.ticker === 'SNOW'
-        ? '158.20'
-        : item.ticker === 'PLTR'
-        ? '24.80'
-        : '142.00'
-    );
+    const uTicker = getUniverseTicker(item.ticker);
+    if (uTicker) {
+      setLimitPrice(uTicker.price.toFixed(2));
+    } else {
+      setLimitPrice('150.00');
+    }
   };
 
   const filteredPositions = positions.filter((p) =>
@@ -119,13 +119,11 @@ export const PortfolioSummary: React.FC<PortfolioSummaryProps> = ({
           >
             NAV:{' '}
             <strong style={{ color: 'var(--text-primary)' }}>
-              ${nav.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+              {formatMoney(nav, 2)}
             </strong>{' '}
             | Day PnL:{' '}
             <strong style={{ color: 'var(--color-positive)' }}>
-              +{dayPnlPct.toFixed(2)}% (+${dayPnlDollars.toLocaleString('en-US', {
-                maximumFractionDigits: 0,
-              })})
+              +{dayPnlPct.toFixed(2)}% (+{formatMoney(dayPnlDollars, 0)})
             </strong>
           </p>
         </div>
@@ -253,9 +251,7 @@ export const PortfolioSummary: React.FC<PortfolioSummaryProps> = ({
                           color: isProfit ? 'var(--color-positive)' : 'var(--color-negative)',
                         }}
                       >
-                        {isProfit ? '+' : ''}${pos.unrealizedPnl.toLocaleString('en-US', {
-                          minimumFractionDigits: 2,
-                        })}
+                        {isProfit ? '+' : ''}{formatMoney(pos.unrealizedPnl, 2)}
                       </td>
                       <td className="py-2.5 text-right">
                         <span

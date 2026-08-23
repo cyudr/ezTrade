@@ -3,6 +3,7 @@ import React, { createContext, useContext, useState, useEffect, useMemo, ReactNo
 export interface TimezoneOption {
   id: string;
   label: string;
+  shortLabel: string;
   city: string;
   code: string;
   flag: string;
@@ -14,6 +15,7 @@ export const TIMEZONE_OPTIONS: TimezoneOption[] = [
   {
     id: 'Asia/Singapore',
     label: 'Singapore (SGT)',
+    shortLabel: 'SGP (SGT)',
     city: 'Singapore',
     code: 'SGT',
     flag: '🇸🇬',
@@ -23,6 +25,7 @@ export const TIMEZONE_OPTIONS: TimezoneOption[] = [
   {
     id: 'America/New_York',
     label: 'New York (EST/EDT)',
+    shortLabel: 'NYC (EDT)',
     city: 'New York',
     code: 'EDT',
     flag: '🇺🇸',
@@ -32,6 +35,7 @@ export const TIMEZONE_OPTIONS: TimezoneOption[] = [
   {
     id: 'Europe/London',
     label: 'London (GMT/BST)',
+    shortLabel: 'LON (BST)',
     city: 'London',
     code: 'BST',
     flag: '🇬🇧',
@@ -41,6 +45,7 @@ export const TIMEZONE_OPTIONS: TimezoneOption[] = [
   {
     id: 'Asia/Tokyo',
     label: 'Tokyo (JST)',
+    shortLabel: 'TYO (JST)',
     city: 'Tokyo',
     code: 'JST',
     flag: '🇯🇵',
@@ -50,6 +55,7 @@ export const TIMEZONE_OPTIONS: TimezoneOption[] = [
   {
     id: 'Asia/Hong_Kong',
     label: 'Hong Kong (HKT)',
+    shortLabel: 'HKG (HKT)',
     city: 'Hong Kong',
     code: 'HKT',
     flag: '🇭🇰',
@@ -59,6 +65,7 @@ export const TIMEZONE_OPTIONS: TimezoneOption[] = [
   {
     id: 'Europe/Berlin',
     label: 'Frankfurt / Berlin (CET/CEST)',
+    shortLabel: 'FRA (CET)',
     city: 'Frankfurt',
     code: 'CEST',
     flag: '🇩🇪',
@@ -68,6 +75,7 @@ export const TIMEZONE_OPTIONS: TimezoneOption[] = [
   {
     id: 'Australia/Sydney',
     label: 'Sydney (AEST/AEDT)',
+    shortLabel: 'SYD (AEST)',
     city: 'Sydney',
     code: 'AEST',
     flag: '🇦🇺',
@@ -77,6 +85,7 @@ export const TIMEZONE_OPTIONS: TimezoneOption[] = [
   {
     id: 'America/Los_Angeles',
     label: 'Los Angeles (PST/PDT)',
+    shortLabel: 'LAX (PDT)',
     city: 'Los Angeles',
     code: 'PDT',
     flag: '🇺🇸',
@@ -86,6 +95,7 @@ export const TIMEZONE_OPTIONS: TimezoneOption[] = [
   {
     id: 'America/Chicago',
     label: 'Chicago (CST/CDT)',
+    shortLabel: 'CHI (CDT)',
     city: 'Chicago',
     code: 'CDT',
     flag: '🇺🇸',
@@ -95,6 +105,7 @@ export const TIMEZONE_OPTIONS: TimezoneOption[] = [
   {
     id: 'UTC',
     label: 'Coordinated Universal Time (UTC)',
+    shortLabel: 'UTC (GMT)',
     city: 'UTC',
     code: 'UTC',
     flag: '🌐',

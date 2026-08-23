@@ -5,7 +5,6 @@ import {
   Share2,
   LineChart,
   Wallet,
-  LogOut,
   Search,
   Bell,
   Settings,
@@ -20,13 +19,15 @@ import {
   Palette,
   Clock,
   Globe,
-  ChevronDown,
-  Activity,
+  DollarSign,
   Check,
+  ShieldCheck,
+  Zap,
 } from 'lucide-react';
 import { ScreenTab, TerminalNotification, ThemeMode } from '../types';
 import { useTheme } from '../context/ThemeContext';
 import { useTimezone, TIMEZONE_OPTIONS } from '../context/TimezoneContext';
+import { useCurrency, CURRENCY_OPTIONS } from '../context/CurrencyContext';
 
 interface NavigationProps {
   currentTab: ScreenTab;
@@ -55,18 +56,30 @@ export const Navigation: React.FC<NavigationProps> = ({
 }) => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [timezoneMenuOpen, setTimezoneMenuOpen] = useState(false);
+  const [currencyMenuOpen, setCurrencyMenuOpen] = useState(false);
+  const [themeMenuOpen, setThemeMenuOpen] = useState(false);
+
   const timezoneMenuRef = useRef<HTMLDivElement>(null);
+  const currencyMenuRef = useRef<HTMLDivElement>(null);
+  const themeMenuRef = useRef<HTMLDivElement>(null);
 
   const { theme, setTheme } = useTheme();
   const { timezone, setTimezone, activeOption, formatTime, formatDate } = useTimezone();
+  const { currency, setCurrency, activeCurrencyOption } = useCurrency();
 
   const unreadCount = notifications.filter((n) => !n.read).length;
 
-  // Close timezone menu on outside click
+  // Close menus on outside click
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (timezoneMenuRef.current && !timezoneMenuRef.current.contains(event.target as Node)) {
         setTimezoneMenuOpen(false);
+      }
+      if (currencyMenuRef.current && !currencyMenuRef.current.contains(event.target as Node)) {
+        setCurrencyMenuOpen(false);
+      }
+      if (themeMenuRef.current && !themeMenuRef.current.contains(event.target as Node)) {
+        setThemeMenuOpen(false);
       }
     };
     document.addEventListener('mousedown', handleClickOutside);
@@ -84,7 +97,7 @@ export const Navigation: React.FC<NavigationProps> = ({
       id: 'research' as ScreenTab,
       label: 'Research',
       icon: BarChart2,
-      desc: 'Statistical distributions & regression',
+      desc: 'Distributions & statistics',
     },
     {
       id: 'signals' as ScreenTab,
@@ -96,13 +109,13 @@ export const Navigation: React.FC<NavigationProps> = ({
       id: 'strategy' as ScreenTab,
       label: 'Strategy',
       icon: LineChart,
-      desc: 'Active execution & risk parameters',
+      desc: 'DMA execution & risk parameters',
     },
     {
       id: 'portfolio' as ScreenTab,
       label: 'Portfolio',
       icon: Wallet,
-      desc: 'Positions, watchlist & order entry',
+      desc: 'Positions, watchlist & orders',
     },
   ];
 
@@ -113,12 +126,15 @@ export const Navigation: React.FC<NavigationProps> = ({
     { id: 'custom', label: 'Custom', icon: Palette },
   ];
 
+  const activeThemeObj = themeOptions.find((t) => t.id === theme) || themeOptions[0];
+  const ActiveThemeIcon = activeThemeObj.icon;
+
   return (
     <>
-      {/* Desktop Persistent Sidebar */}
+      {/* Desktop Persistent Sidebar - Streamlined, Non-Duplicated, Width w-56 (224px) */}
       <nav
         id="side-navigation"
-        className="hidden md:flex flex-col h-screen fixed left-0 top-0 z-40 w-64 select-none transition-colors"
+        className="hidden md:flex flex-col h-screen fixed left-0 top-0 z-40 w-56 select-none transition-colors"
         style={{
           backgroundColor: 'var(--bg-sidebar)',
           borderRight: '1px solid var(--border-subtle)',
@@ -126,16 +142,16 @@ export const Navigation: React.FC<NavigationProps> = ({
         }}
       >
         {/* User Identity Section */}
-        <div className="px-4 py-3 mb-2">
+        <div className="px-3 py-3 mb-1">
           <div
-            className="flex items-center gap-3 p-2.5 rounded-lg transition-colors"
+            className="flex items-center gap-2.5 p-2 rounded-lg transition-colors"
             style={{
               backgroundColor: 'var(--bg-card-subtle)',
               border: '1px solid var(--border-subtle)',
             }}
           >
             <div
-              className="w-9 h-9 rounded-full overflow-hidden shrink-0 relative"
+              className="w-8 h-8 rounded-full overflow-hidden shrink-0 relative"
               style={{ border: '1px solid var(--border-strong)' }}
             >
               <img
@@ -153,14 +169,14 @@ export const Navigation: React.FC<NavigationProps> = ({
             <div className="min-w-0 flex-1">
               <div className="flex items-center justify-between">
                 <h2
-                  className="font-bold text-[13px] font-mono-val truncate"
+                  className="font-bold text-[12px] font-mono-val truncate"
                   style={{ color: 'var(--text-primary)' }}
                 >
                   Opti_Trader_01
                 </h2>
               </div>
               <div
-                className="flex items-center gap-1 text-[10px] font-mono-val font-semibold uppercase tracking-wider mt-0.5"
+                className="flex items-center gap-1 text-[9px] font-mono-val font-semibold uppercase tracking-wider mt-0.5"
                 style={{ color: 'var(--color-positive)' }}
               >
                 <span
@@ -173,8 +189,8 @@ export const Navigation: React.FC<NavigationProps> = ({
           </div>
         </div>
 
-        {/* Navigation Items */}
-        <ul className="flex flex-col flex-grow gap-1 px-3">
+        {/* Core Navigation Items */}
+        <ul className="flex flex-col flex-grow gap-1 px-2.5">
           {navItems.map((item) => {
             const Icon = item.icon;
             const isActive = currentTab === item.id;
@@ -183,7 +199,7 @@ export const Navigation: React.FC<NavigationProps> = ({
                 <button
                   id={`nav-btn-${item.id}`}
                   onClick={() => onSelectTab(item.id)}
-                  className="w-full flex items-center gap-3 px-3 py-2 rounded-lg font-mono-val text-[12px] font-semibold tracking-wide transition-all cursor-pointer text-left"
+                  className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg font-mono-val text-[12px] font-semibold tracking-wide transition-all cursor-pointer text-left"
                   style={{
                     backgroundColor: isActive ? 'var(--accent-subtle)' : 'transparent',
                     color: isActive ? 'var(--accent-text)' : 'var(--text-secondary)',
@@ -207,114 +223,8 @@ export const Navigation: React.FC<NavigationProps> = ({
           })}
         </ul>
 
-        {/* Theme Quick Selector in Sidebar */}
-        <div className="px-3 mb-2">
-          <div
-            className="p-2 rounded-lg transition-colors"
-            style={{
-              backgroundColor: 'var(--bg-card-subtle)',
-              border: '1px solid var(--border-subtle)',
-            }}
-          >
-            <div className="flex items-center justify-between text-[10px] font-mono-val uppercase tracking-wider mb-1.5">
-              <span style={{ color: 'var(--text-muted)' }}>Theme Mode</span>
-              <span style={{ color: 'var(--accent-primary)' }} className="font-bold">
-                {theme.toUpperCase()}
-              </span>
-            </div>
-            <div className="grid grid-cols-4 gap-1">
-              {themeOptions.map((t) => {
-                const Icon = t.icon;
-                const isSelected = theme === t.id;
-                return (
-                  <button
-                    key={t.id}
-                    onClick={() => setTheme(t.id)}
-                    className="flex flex-col items-center justify-center py-1.5 px-1 rounded text-[10px] font-mono-val transition-all cursor-pointer"
-                    style={{
-                      backgroundColor: isSelected ? 'var(--bg-card)' : 'transparent',
-                      color: isSelected ? 'var(--accent-primary)' : 'var(--text-muted)',
-                      border: isSelected
-                        ? '1px solid var(--border-strong)'
-                        : '1px solid transparent',
-                      boxShadow: isSelected ? 'var(--shadow-subtle)' : 'none',
-                    }}
-                    title={`${t.label} Theme`}
-                  >
-                    <Icon className="w-3.5 h-3.5 mb-0.5" />
-                    <span>{t.label}</span>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        </div>
-
-        {/* Real-time Clock & Timezone Selector in Sidebar */}
-        <div className="px-3 mb-2">
-          <div
-            className="p-2.5 rounded-lg transition-colors"
-            style={{
-              backgroundColor: 'var(--bg-card-subtle)',
-              border: '1px solid var(--border-subtle)',
-            }}
-          >
-            <div className="flex items-center justify-between text-[10px] font-mono-val uppercase tracking-wider mb-1">
-              <div className="flex items-center gap-1.5">
-                <Clock className="w-3 h-3" style={{ color: 'var(--accent-primary)' }} />
-                <span style={{ color: 'var(--text-muted)' }}>Real-Time Clock</span>
-              </div>
-              <span
-                className="font-bold text-[10px]"
-                style={{ color: 'var(--accent-primary)' }}
-              >
-                {activeOption.code} ({activeOption.offset})
-              </span>
-            </div>
-            <div className="flex items-baseline justify-between">
-              <div
-                className="text-[15px] font-mono-val font-bold tracking-tight"
-                style={{ color: 'var(--text-primary)' }}
-              >
-                {formatTime()}
-              </div>
-              <div
-                className="text-[10px] font-mono-val"
-                style={{ color: 'var(--text-muted)' }}
-              >
-                {formatDate()}
-              </div>
-            </div>
-
-            {/* Quick timezone selector select */}
-            <div className="mt-2 pt-2 border-t flex items-center justify-between gap-1" style={{ borderColor: 'var(--border-subtle)' }}>
-              <span className="text-[10px] font-mono-val" style={{ color: 'var(--text-muted)' }}>
-                Timezone:
-              </span>
-              <select
-                id="sidebar-timezone-select"
-                value={timezone}
-                onChange={(e) => setTimezone(e.target.value)}
-                aria-label="Terminal Timezone Selection"
-                className="text-[11px] font-mono-val py-0.5 px-1.5 rounded cursor-pointer focus:outline-none transition-colors"
-                style={{
-                  backgroundColor: 'var(--bg-card)',
-                  color: 'var(--text-primary)',
-                  border: '1px solid var(--border-subtle)',
-                }}
-              >
-                {TIMEZONE_OPTIONS.map((opt) => (
-                  <option key={opt.id} value={opt.id}>
-                    {opt.flag} {opt.city} ({opt.code})
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
-        </div>
-
-        {/* Live Engine Stream Controller */}
-        <div className="px-3 mb-2">
+        {/* Engine Stream Controller */}
+        <div className="px-2.5 mb-2">
           <div
             className="p-2 rounded-lg flex items-center justify-between text-[11px] font-mono-val transition-colors"
             style={{
@@ -322,7 +232,7 @@ export const Navigation: React.FC<NavigationProps> = ({
               border: '1px solid var(--border-subtle)',
             }}
           >
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1.5">
               <Sparkles className="w-3.5 h-3.5" style={{ color: 'var(--accent-primary)' }} />
               <span style={{ color: 'var(--text-secondary)' }}>Market Feed</span>
             </div>
@@ -346,14 +256,35 @@ export const Navigation: React.FC<NavigationProps> = ({
           </div>
         </div>
 
+        {/* System Telemetry Badge */}
+        <div className="px-2.5 mb-2">
+          <div
+            className="p-2 rounded-lg flex items-center justify-between text-[10px] font-mono-val"
+            style={{
+              backgroundColor: 'var(--bg-card-subtle)',
+              border: '1px solid var(--border-subtle)',
+              color: 'var(--text-muted)',
+            }}
+          >
+            <div className="flex items-center gap-1.5">
+              <ShieldCheck className="w-3.5 h-3.5" style={{ color: 'var(--color-positive)' }} />
+              <span>DMA v4.2.0</span>
+            </div>
+            <div className="flex items-center gap-1 font-semibold" style={{ color: 'var(--color-positive)' }}>
+              <Zap className="w-3 h-3" />
+              <span>11ms</span>
+            </div>
+          </div>
+        </div>
+
         {/* Bottom Config Action */}
         <div
-          className="px-3 py-2 border-t transition-colors"
+          className="px-2.5 py-2 border-t transition-colors"
           style={{ borderColor: 'var(--border-subtle)' }}
         >
           <button
             onClick={onOpenSettings}
-            className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg font-mono-val text-[11px] uppercase tracking-wider font-semibold transition-colors cursor-pointer"
+            className="w-full flex items-center gap-2 px-3 py-1.5 rounded-lg font-mono-val text-[11px] uppercase tracking-wider font-semibold transition-colors cursor-pointer"
             style={{
               color: 'var(--text-secondary)',
             }}
@@ -366,27 +297,28 @@ export const Navigation: React.FC<NavigationProps> = ({
         </div>
       </nav>
 
-      {/* Top Header Bar for Desktop & Mobile */}
+      {/* Top Header Bar - Authoritative Real-Time Widget, Global Search, and Icon-Only Tools (left-0 md:left-56) */}
       <header
         id="top-header"
-        className="fixed top-0 right-0 left-0 md:left-64 z-30 h-14 px-4 flex items-center justify-between transition-colors backdrop-blur-md"
+        className="fixed top-0 right-0 left-0 md:left-56 z-30 h-14 px-3 sm:px-4 flex items-center justify-between transition-colors backdrop-blur-md"
         style={{
           backgroundColor: 'var(--bg-header)',
           borderBottom: '1px solid var(--border-subtle)',
         }}
       >
-        <div className="flex items-center gap-3 flex-1">
+        <div className="flex items-center gap-2 sm:gap-3 flex-1 min-w-0">
           {/* Mobile hamburger */}
           <button
             onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-            className="md:hidden p-1.5 rounded-lg transition-colors cursor-pointer"
+            className="md:hidden p-1.5 rounded-lg transition-colors cursor-pointer shrink-0"
             style={{ color: 'var(--text-secondary)' }}
+            aria-label="Toggle navigation menu"
           >
             {mobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
           </button>
 
           {/* Terminal Branding */}
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 shrink-0">
             <div
               className="p-1 rounded"
               style={{
@@ -397,16 +329,16 @@ export const Navigation: React.FC<NavigationProps> = ({
               <Terminal className="w-4 h-4" />
             </div>
             <span
-              className="font-bold text-[15px] tracking-tight font-mono-val"
+              className="font-bold text-[14px] sm:text-[15px] tracking-tight font-mono-val hidden sm:inline"
               style={{ color: 'var(--text-primary)' }}
             >
               QUANT_TERMINAL
             </span>
           </div>
 
-          {/* Real-time Clock Widget in Header */}
+          {/* Authoritative Real-time Clock & Date Widget (Top Bar Only) */}
           <div
-            className="hidden md:flex items-center gap-2.5 px-3 py-1 rounded-lg ml-2 transition-colors"
+            className="hidden sm:flex items-center gap-2 px-2.5 py-1 rounded-lg transition-colors shrink-0"
             style={{
               backgroundColor: 'var(--bg-card-subtle)',
               border: '1px solid var(--border-subtle)',
@@ -418,22 +350,22 @@ export const Navigation: React.FC<NavigationProps> = ({
                 style={{ backgroundColor: isLiveTicking ? 'var(--color-positive)' : 'var(--text-muted)' }}
               />
               <span
-                className="text-[13px] font-mono-val font-bold tracking-tight"
+                className="text-[12px] font-mono-val font-bold tracking-tight"
                 style={{ color: 'var(--text-primary)' }}
               >
                 {formatTime()}
               </span>
             </div>
             <div
-              className="text-[11px] font-mono-val"
+              className="text-[10px] font-mono-val hidden md:inline"
               style={{ color: 'var(--text-muted)' }}
             >
               {formatDate()}
             </div>
           </div>
 
-          {/* Search Bar */}
-          <div className="hidden lg:flex items-center relative ml-2 w-72">
+          {/* Global Search Bar */}
+          <div className="hidden lg:flex items-center relative flex-1 max-w-xs">
             <Search
               className="w-3.5 h-3.5 absolute left-3 pointer-events-none"
               style={{ color: 'var(--text-muted)' }}
@@ -463,43 +395,46 @@ export const Navigation: React.FC<NavigationProps> = ({
           </div>
         </div>
 
-        {/* Right Tools, Timezone Dropdown, Theme Toggle & Alerts */}
-        <div className="flex items-center gap-1.5 sm:gap-2">
-          {/* Header Timezone Quick Selector */}
+        {/* Right Tools: Icon-Only Timezone, Icon-Only Currency, Theme Selector, Notifications & Help */}
+        <div className="flex items-center gap-1 sm:gap-1.5 shrink-0">
+          {/* Header Timezone Selector (Icon Only Trigger) */}
           <div className="relative" ref={timezoneMenuRef}>
             <button
               id="header-timezone-btn"
-              onClick={() => setTimezoneMenuOpen(!timezoneMenuOpen)}
-              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-mono-val transition-all cursor-pointer"
-              style={{
-                backgroundColor: 'var(--bg-card-subtle)',
-                border: '1px solid var(--border-subtle)',
-                color: 'var(--text-primary)',
+              onClick={() => {
+                setTimezoneMenuOpen(!timezoneMenuOpen);
+                setCurrencyMenuOpen(false);
+                setThemeMenuOpen(false);
               }}
-              title="Change Timezone"
+              className="w-8 h-8 rounded-lg flex items-center justify-center transition-all cursor-pointer"
+              style={{
+                backgroundColor: timezoneMenuOpen ? 'var(--accent-subtle)' : 'var(--bg-card-subtle)',
+                border: '1px solid var(--border-subtle)',
+                color: timezoneMenuOpen ? 'var(--accent-primary)' : 'var(--text-primary)',
+              }}
+              title={`Active Timezone: ${activeOption.code} (${activeOption.offset})`}
+              aria-label="Timezone Selection"
             >
-              <Globe className="w-3.5 h-3.5" style={{ color: 'var(--accent-primary)' }} />
-              <span className="font-semibold">{activeOption.flag} {activeOption.code}</span>
-              <span className="hidden sm:inline text-[10px]" style={{ color: 'var(--text-muted)' }}>
-                ({activeOption.offset})
-              </span>
-              <ChevronDown className="w-3 h-3 ml-0.5" style={{ color: 'var(--text-muted)' }} />
+              <Globe className="w-4 h-4" style={{ color: 'var(--accent-primary)' }} />
             </button>
 
-            {/* Timezone Dropdown Menu */}
+            {/* Timezone Dropdown Menu (Short Letters Only) */}
             {timezoneMenuOpen && (
               <div
-                className="absolute right-0 mt-1.5 w-72 rounded-xl shadow-xl z-50 p-2 border transition-all animate-in fade-in slide-in-from-top-2 duration-150 font-mono-val"
+                className="absolute right-0 mt-1.5 w-56 rounded-xl shadow-xl z-50 p-2 border transition-all animate-in fade-in slide-in-from-top-2 duration-150 font-mono-val"
                 style={{
                   backgroundColor: 'var(--bg-card)',
                   borderColor: 'var(--border-strong)',
                 }}
               >
-                <div className="px-2 py-1.5 text-[10px] font-bold uppercase tracking-wider border-b mb-1 flex items-center justify-between" style={{ borderColor: 'var(--border-subtle)', color: 'var(--text-muted)' }}>
-                  <span>Select Terminal Timezone</span>
-                  <span>Real-Time Sync</span>
+                <div
+                  className="px-2 py-1 text-[10px] font-bold uppercase tracking-wider border-b mb-1 flex items-center justify-between"
+                  style={{ borderColor: 'var(--border-subtle)', color: 'var(--text-muted)' }}
+                >
+                  <span>TIMEZONE</span>
+                  <span style={{ color: 'var(--accent-primary)' }}>{activeOption.code}</span>
                 </div>
-                <div className="max-h-72 overflow-y-auto space-y-1">
+                <div className="max-h-64 overflow-y-auto space-y-0.5">
                   {TIMEZONE_OPTIONS.map((opt) => {
                     const isSelected = timezone === opt.id;
                     return (
@@ -509,25 +444,20 @@ export const Navigation: React.FC<NavigationProps> = ({
                           setTimezone(opt.id);
                           setTimezoneMenuOpen(false);
                         }}
-                        className="w-full flex items-center justify-between px-2.5 py-2 rounded-lg text-left text-[12px] transition-colors cursor-pointer"
+                        className="w-full flex items-center justify-between px-2 py-1.5 rounded-md text-left text-[11px] transition-colors cursor-pointer"
                         style={{
                           backgroundColor: isSelected ? 'var(--accent-subtle)' : 'transparent',
                           color: isSelected ? 'var(--accent-text)' : 'var(--text-primary)',
                         }}
                       >
-                        <div className="flex items-center gap-2">
-                          <span className="text-base">{opt.flag}</span>
-                          <div>
-                            <div className="font-semibold text-[12px] leading-tight">
-                              {opt.city} ({opt.code})
-                            </div>
-                            <div className="text-[10px]" style={{ color: 'var(--text-muted)' }}>
-                              {opt.offset} • {opt.region}
-                            </div>
-                          </div>
-                        </div>
+                        <span className="font-semibold">
+                          {opt.shortLabel || `${opt.code} (${opt.offset})`}
+                        </span>
                         {isSelected && (
-                          <Check className="w-4 h-4 shrink-0" style={{ color: 'var(--accent-primary)' }} />
+                          <Check
+                            className="w-3.5 h-3.5 shrink-0"
+                            style={{ color: 'var(--accent-primary)' }}
+                          />
                         )}
                       </button>
                     );
@@ -537,7 +467,77 @@ export const Navigation: React.FC<NavigationProps> = ({
             )}
           </div>
 
-          {/* Quick Theme Switcher Pill in Header */}
+          {/* Header Currency Selector (Icon Only Trigger) */}
+          <div className="relative" ref={currencyMenuRef}>
+            <button
+              id="header-currency-btn"
+              onClick={() => {
+                setCurrencyMenuOpen(!currencyMenuOpen);
+                setTimezoneMenuOpen(false);
+                setThemeMenuOpen(false);
+              }}
+              className="w-8 h-8 rounded-lg flex items-center justify-center transition-all cursor-pointer"
+              style={{
+                backgroundColor: currencyMenuOpen ? 'var(--accent-subtle)' : 'var(--bg-card-subtle)',
+                border: '1px solid var(--border-subtle)',
+                color: currencyMenuOpen ? 'var(--accent-primary)' : 'var(--text-primary)',
+              }}
+              title={`Base Currency: ${currency} (${activeCurrencyOption.symbol})`}
+              aria-label="Currency Selection"
+            >
+              <DollarSign className="w-4 h-4" style={{ color: 'var(--accent-primary)' }} />
+            </button>
+
+            {/* Currency Dropdown Menu (Short Letters Only) */}
+            {currencyMenuOpen && (
+              <div
+                className="absolute right-0 mt-1.5 w-48 rounded-xl shadow-xl z-50 p-2 border transition-all animate-in fade-in slide-in-from-top-2 duration-150 font-mono-val"
+                style={{
+                  backgroundColor: 'var(--bg-card)',
+                  borderColor: 'var(--border-strong)',
+                }}
+              >
+                <div
+                  className="px-2 py-1 text-[10px] font-bold uppercase tracking-wider border-b mb-1 flex items-center justify-between"
+                  style={{ borderColor: 'var(--border-subtle)', color: 'var(--text-muted)' }}
+                >
+                  <span>BASE CURRENCY</span>
+                  <span style={{ color: 'var(--accent-primary)' }}>{currency}</span>
+                </div>
+                <div className="max-h-64 overflow-y-auto space-y-0.5">
+                  {CURRENCY_OPTIONS.map((c) => {
+                    const isSelected = currency === c.code;
+                    return (
+                      <button
+                        key={c.code}
+                        onClick={() => {
+                          setCurrency(c.code);
+                          setCurrencyMenuOpen(false);
+                        }}
+                        className="w-full flex items-center justify-between px-2 py-1.5 rounded-md text-left text-[11px] transition-colors cursor-pointer"
+                        style={{
+                          backgroundColor: isSelected ? 'var(--accent-subtle)' : 'transparent',
+                          color: isSelected ? 'var(--accent-text)' : 'var(--text-primary)',
+                        }}
+                      >
+                        <span className="font-semibold">
+                          {c.code} ({c.symbol})
+                        </span>
+                        {isSelected && (
+                          <Check
+                            className="w-3.5 h-3.5 shrink-0"
+                            style={{ color: 'var(--accent-primary)' }}
+                          />
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Quick Theme Switcher in Header */}
           <div
             className="flex items-center p-0.5 rounded-lg"
             style={{
@@ -552,7 +552,7 @@ export const Navigation: React.FC<NavigationProps> = ({
                 <button
                   key={t.id}
                   onClick={() => setTheme(t.id)}
-                  className="px-2 py-1 rounded text-[11px] font-mono-val flex items-center gap-1 transition-all cursor-pointer"
+                  className="px-1.5 sm:px-2 py-1 rounded text-[10px] font-mono-val flex items-center gap-1 transition-all cursor-pointer"
                   style={{
                     backgroundColor: isSelected ? 'var(--bg-card)' : 'transparent',
                     color: isSelected ? 'var(--accent-primary)' : 'var(--text-muted)',
@@ -562,27 +562,13 @@ export const Navigation: React.FC<NavigationProps> = ({
                   title={`Switch to ${t.label} theme`}
                 >
                   <Icon className="w-3 h-3" />
-                  <span className="hidden sm:inline">{t.label}</span>
+                  <span className="hidden lg:inline">{t.label}</span>
                 </button>
               );
             })}
           </div>
 
-          <div
-            className="hidden xl:flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-mono-val"
-            style={{
-              backgroundColor: 'var(--color-positive-bg)',
-              color: 'var(--color-positive)',
-              border: '1px solid var(--color-positive-border)',
-            }}
-          >
-            <span
-              className="w-1.5 h-1.5 rounded-full"
-              style={{ backgroundColor: 'var(--color-positive)' }}
-            />
-            <span>Engine Ready</span>
-          </div>
-
+          {/* Notifications Trigger */}
           <button
             id="notifications-btn"
             onClick={onOpenNotifications}
@@ -593,6 +579,7 @@ export const Navigation: React.FC<NavigationProps> = ({
             onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'var(--bg-card-hover)')}
             onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
             title="Notifications"
+            aria-label="Notifications"
           >
             <Bell className="w-4 h-4" />
             {unreadCount > 0 && (
@@ -606,6 +593,7 @@ export const Navigation: React.FC<NavigationProps> = ({
             )}
           </button>
 
+          {/* Settings Trigger */}
           <button
             id="settings-btn"
             onClick={onOpenSettings}
@@ -615,11 +603,13 @@ export const Navigation: React.FC<NavigationProps> = ({
             }}
             onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'var(--bg-card-hover)')}
             onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
-            title="Terminal Settings & Custom Theme"
+            title="Terminal Settings & Custom Themes"
+            aria-label="Terminal Settings"
           >
             <Settings className="w-4 h-4" />
           </button>
 
+          {/* Help & Shortcuts Trigger */}
           <button
             id="help-btn"
             onClick={onOpenHelp}
@@ -630,6 +620,7 @@ export const Navigation: React.FC<NavigationProps> = ({
             onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'var(--bg-card-hover)')}
             onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
             title="Help & Shortcuts"
+            aria-label="Help and Shortcuts"
           >
             <HelpCircle className="w-4 h-4" />
           </button>
@@ -699,7 +690,7 @@ export const Navigation: React.FC<NavigationProps> = ({
               );
             })}
 
-            {/* Mobile Timezone Selector */}
+            {/* Mobile Timezone Selector (Short Letters Only) */}
             <div
               className="mt-3 p-3 rounded-lg"
               style={{
@@ -711,7 +702,7 @@ export const Navigation: React.FC<NavigationProps> = ({
                 className="text-[11px] font-mono-val font-semibold uppercase tracking-wider mb-2 flex items-center justify-between"
                 style={{ color: 'var(--text-muted)' }}
               >
-                <span>Select Timezone</span>
+                <span>Timezone</span>
                 <span style={{ color: 'var(--accent-primary)' }}>{formatTime()}</span>
               </div>
               <div className="grid grid-cols-2 gap-2">
@@ -730,18 +721,14 @@ export const Navigation: React.FC<NavigationProps> = ({
                           : '1px solid var(--border-subtle)',
                       }}
                     >
-                      <span>{opt.flag}</span>
-                      <div className="truncate">
-                        <div className="font-semibold truncate">{opt.city}</div>
-                        <div className="text-[9px]" style={{ color: 'var(--text-muted)' }}>{opt.code} ({opt.offset})</div>
-                      </div>
+                      <span className="font-semibold">{opt.shortLabel || `${opt.code}`}</span>
                     </button>
                   );
                 })}
               </div>
             </div>
 
-            {/* Mobile Theme Selector */}
+            {/* Mobile Currency Selector (Short Letters Only) */}
             <div
               className="mt-3 p-3 rounded-lg"
               style={{
@@ -750,20 +737,20 @@ export const Navigation: React.FC<NavigationProps> = ({
               }}
             >
               <div
-                className="text-[11px] font-mono-val font-semibold uppercase tracking-wider mb-2"
+                className="text-[11px] font-mono-val font-semibold uppercase tracking-wider mb-2 flex items-center justify-between"
                 style={{ color: 'var(--text-muted)' }}
               >
-                Select Theme
+                <span>Currency</span>
+                <span style={{ color: 'var(--accent-primary)' }}>{currency}</span>
               </div>
               <div className="grid grid-cols-2 gap-2">
-                {themeOptions.map((t) => {
-                  const Icon = t.icon;
-                  const isSelected = theme === t.id;
+                {CURRENCY_OPTIONS.map((c) => {
+                  const isSelected = currency === c.code;
                   return (
                     <button
-                      key={t.id}
-                      onClick={() => setTheme(t.id)}
-                      className="flex items-center gap-2 p-2 rounded text-[12px] font-mono-val transition-all"
+                      key={c.code}
+                      onClick={() => setCurrency(c.code)}
+                      className="flex items-center justify-between p-2 rounded text-[11px] font-mono-val transition-all"
                       style={{
                         backgroundColor: isSelected ? 'var(--accent-subtle)' : 'var(--bg-card-subtle)',
                         color: isSelected ? 'var(--accent-text)' : 'var(--text-secondary)',
@@ -772,8 +759,8 @@ export const Navigation: React.FC<NavigationProps> = ({
                           : '1px solid var(--border-subtle)',
                       }}
                     >
-                      <Icon className="w-4 h-4" />
-                      <span>{t.label}</span>
+                      <span className="font-semibold">{c.code} ({c.symbol})</span>
+                      {isSelected && <Check className="w-3 h-3" />}
                     </button>
                   );
                 })}

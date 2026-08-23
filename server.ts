@@ -8,12 +8,11 @@ dotenv.config();
 
 // Import serverless API handlers directly
 import healthHandler from './api/health';
-import ltaStatusHandler from './api/lta/status';
-import ltaCarparksHandler from './api/lta/carparks';
-import onemapSearchHandler from './api/onemap/search';
 import marketLatestHandler from './api/market/latest';
 import marketTimeseriesHandler from './api/market/timeseries';
 import cryptoPricesHandler from './api/crypto/prices';
+import marketStocksHandler from './api/market/stocks';
+import marketNewsHandler from './api/market/news';
 import signalsHandler from './api/signals/index';
 
 async function startServer() {
@@ -24,11 +23,10 @@ async function startServer() {
 
   // API Routes (Mounted first)
   app.all('/api/health', (req, res) => healthHandler(req, res));
-  app.all('/api/lta/status', (req, res) => ltaStatusHandler(req, res));
-  app.all('/api/lta/carparks', (req, res) => ltaCarparksHandler(req, res));
-  app.all('/api/onemap/search', (req, res) => onemapSearchHandler(req, res));
   app.all('/api/market/latest', (req, res) => marketLatestHandler(req, res));
   app.all('/api/market/timeseries', (req, res) => marketTimeseriesHandler(req, res));
+  app.all('/api/market/stocks', (req, res) => marketStocksHandler(req, res));
+  app.all('/api/market/news', (req, res) => marketNewsHandler(req, res));
   app.all('/api/crypto/prices', (req, res) => cryptoPricesHandler(req, res));
   app.all('/api/signals', (req, res) => signalsHandler(req, res));
 

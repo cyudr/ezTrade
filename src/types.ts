@@ -12,6 +12,7 @@ export interface CustomThemeConfig {
 
 export interface TickerItem {
   symbol: string;
+  name?: string;
   price: number;
   change: number;
   changePct: number;
@@ -20,6 +21,9 @@ export interface TickerItem {
   volume?: string;
   sparkline: number[];
   tickStatus?: 'up' | 'down' | 'none';
+  assetClass?: 'US_EQUITY' | 'CRYPTO' | 'FX' | 'SGX' | 'BOND';
+  lastClose?: number;
+  isMarketOpen?: boolean;
 }
 
 export interface SentimentItem {
@@ -29,6 +33,9 @@ export interface SentimentItem {
   sentiment: 'HAWKISH' | 'BEARISH' | 'NEUTRAL';
   score: number; // 0 - 100
   tags: string[];
+  source?: string;
+  sourceUrl?: string;
+  author?: string;
 }
 
 export interface PositionItem {
@@ -120,6 +127,7 @@ export interface ApiConfig {
   localSignalEndpoint: string;
   localSignalMode: 'auto_fallback' | 'local_only' | 'simulated_only';
   localSignalStatus: 'connected' | 'offline' | 'checking' | 'error';
+  allowWeekendSimulation?: boolean;
   lastFxSync?: string;
   lastCryptoSync?: string;
   lastSignalSync?: string;
