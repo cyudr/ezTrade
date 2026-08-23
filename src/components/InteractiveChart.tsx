@@ -534,39 +534,47 @@ export const InteractiveChart: React.FC<InteractiveChartProps> = ({
                   {name}
                 </span>
               )}
-              <span className="text-lg font-bold font-mono-val" style={{ color: 'var(--text-primary)' }}>
-                ${activePoint?.close ? activePoint.close.toFixed(2) : basePrice.toFixed(2)}
-              </span>
-              <span
-                className="text-xs font-semibold px-2 py-0.5 rounded font-mono-val"
-                style={{
-                  backgroundColor: changePct >= 0 ? 'var(--color-positive-bg)' : 'var(--color-negative-bg)',
-                  color: changePct >= 0 ? 'var(--color-positive)' : 'var(--color-negative)',
-                  border: `1px solid ${changePct >= 0 ? 'var(--color-positive-border)' : 'var(--color-negative-border)'}`,
-                }}
-              >
-                {changePct >= 0 ? '+' : ''}
-                {changePct.toFixed(2)}% ({change >= 0 ? '+' : ''}${change.toFixed(2)})
-              </span>
+              {((activePoint?.close ?? basePrice ?? 0) > 0) ? (
+                <>
+                  <span className="text-lg font-bold font-mono-val" style={{ color: 'var(--text-primary)' }}>
+                    ${activePoint?.close != null ? activePoint.close.toFixed(2) : (basePrice ?? 0).toFixed(2)}
+                  </span>
+                  <span
+                    className="text-xs font-semibold px-2 py-0.5 rounded font-mono-val"
+                    style={{
+                      backgroundColor: (changePct ?? 0) >= 0 ? 'var(--color-positive-bg)' : 'var(--color-negative-bg)',
+                      color: (changePct ?? 0) >= 0 ? 'var(--color-positive)' : 'var(--color-negative)',
+                      border: `1px solid ${(changePct ?? 0) >= 0 ? 'var(--color-positive-border)' : 'var(--color-negative-border)'}`,
+                    }}
+                  >
+                    {(changePct ?? 0) >= 0 ? '+' : ''}
+                    {(changePct ?? 0).toFixed(2)}% ({(change ?? 0) >= 0 ? '+' : ''}${(change ?? 0).toFixed(2)})
+                  </span>
+                </>
+              ) : (
+                <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-rose-500/10 text-rose-400 border border-rose-500/20 font-mono-val">
+                  API offline
+                </span>
+              )}
             </div>
 
             {/* Hovered stats HUD */}
             {activePoint && (
               <div className="flex items-center gap-3 text-xs font-mono-val">
                 <span style={{ color: 'var(--text-muted)' }}>
-                  O: <strong style={{ color: 'var(--text-primary)' }}>${activePoint.open.toFixed(2)}</strong>
+                  O: <strong style={{ color: 'var(--text-primary)' }}>${activePoint.open != null ? activePoint.open.toFixed(2) : '—'}</strong>
                 </span>
                 <span style={{ color: 'var(--text-muted)' }}>
-                  H: <strong className="text-emerald-500">${activePoint.high.toFixed(2)}</strong>
+                  H: <strong className="text-emerald-500">${activePoint.high != null ? activePoint.high.toFixed(2) : '—'}</strong>
                 </span>
                 <span style={{ color: 'var(--text-muted)' }}>
-                  L: <strong className="text-rose-500">${activePoint.low.toFixed(2)}</strong>
+                  L: <strong className="text-rose-500">${activePoint.low != null ? activePoint.low.toFixed(2) : '—'}</strong>
                 </span>
                 <span style={{ color: 'var(--text-muted)' }}>
-                  C: <strong style={{ color: 'var(--text-primary)' }}>${activePoint.close.toFixed(2)}</strong>
+                  C: <strong style={{ color: 'var(--text-primary)' }}>${activePoint.close != null ? activePoint.close.toFixed(2) : '—'}</strong>
                 </span>
                 <span style={{ color: 'var(--text-muted)' }}>
-                  VOL: <strong style={{ color: 'var(--text-secondary)' }}>{(activePoint.volume / 1000).toFixed(0)}k</strong>
+                  VOL: <strong style={{ color: 'var(--text-secondary)' }}>{activePoint.volume != null ? (activePoint.volume / 1000).toFixed(0) : '0'}k</strong>
                 </span>
               </div>
             )}
@@ -630,7 +638,7 @@ export const InteractiveChart: React.FC<InteractiveChartProps> = ({
                       fontSize="10"
                       fontFamily="monospace"
                     >
-                      ${price.toFixed(price > 10 ? 2 : 4)}
+                      ${(price ?? 0).toFixed((price ?? 0) > 10 ? 2 : 4)}
                     </text>
                   </g>
                 );
@@ -936,10 +944,10 @@ export const InteractiveChart: React.FC<InteractiveChartProps> = ({
                   <span className="font-bold">{ds.symbol}</span>
                   <span
                     className="text-[11px] font-semibold ml-1"
-                    style={{ color: ds.currentPct >= 0 ? 'var(--color-positive)' : 'var(--color-negative)' }}
+                    style={{ color: (ds.currentPct ?? 0) >= 0 ? 'var(--color-positive)' : 'var(--color-negative)' }}
                   >
-                    {ds.currentPct >= 0 ? '+' : ''}
-                    {ds.currentPct.toFixed(2)}%
+                    {(ds.currentPct ?? 0) >= 0 ? '+' : ''}
+                    {(ds.currentPct ?? 0).toFixed(2)}%
                   </span>
                   {!ds.isPrimary && (
                     <button
@@ -1163,21 +1171,30 @@ export const InteractiveChart: React.FC<InteractiveChartProps> = ({
                             <span className="text-[10px] px-1 rounded bg-blue-500/10 text-blue-400">PRIMARY</span>
                           )}
                         </td>
-                        <td className="py-2 text-right" style={{ color: 'var(--text-primary)' }}>
-                          ${ds.data[ds.data.length - 1]?.close.toFixed(2)}
+                        <td className="py-2 text-right font-mono-val" style={{ color: 'var(--text-primary)' }}>
+                          {(ds.data[ds.data.length - 1]?.close ?? 0) > 0 ? (
+                            `$${(ds.data[ds.data.length - 1]?.close ?? 0).toFixed(2)}`
+                          ) : (
+                            <span className="text-[10px] px-1.5 py-0.2 rounded font-semibold bg-rose-500/10 text-rose-400 border border-rose-500/20">
+                              API offline
+                            </span>
+                          )}
                         </td>
                         <td
-                          className="py-2 text-right font-bold"
-                          style={{ color: ds.currentPct >= 0 ? 'var(--color-positive)' : 'var(--color-negative)' }}
+                          className="py-2 text-right font-bold font-mono-val"
+                          style={{ color: (ds.currentPct ?? 0) >= 0 ? 'var(--color-positive)' : 'var(--color-negative)' }}
                         >
-                          {ds.currentPct >= 0 ? '+' : ''}
-                          {ds.currentPct.toFixed(2)}%
+                          {(ds.data[ds.data.length - 1]?.close ?? 0) > 0 ? (
+                            `${(ds.currentPct ?? 0) >= 0 ? '+' : ''}${(ds.currentPct ?? 0).toFixed(2)}%`
+                          ) : (
+                            '—'
+                          )}
                         </td>
                         <td
                           className="py-2 text-right font-medium"
-                          style={{ color: ds.isPrimary ? 'var(--text-muted)' : alpha >= 0 ? 'var(--color-positive)' : 'var(--color-negative)' }}
+                          style={{ color: ds.isPrimary ? 'var(--text-muted)' : (alpha ?? 0) >= 0 ? 'var(--color-positive)' : 'var(--color-negative)' }}
                         >
-                          {ds.isPrimary ? '—' : `${alpha >= 0 ? '+' : ''}${alpha.toFixed(2)}%`}
+                          {ds.isPrimary ? '—' : `${(alpha ?? 0) >= 0 ? '+' : ''}${(alpha ?? 0).toFixed(2)}%`}
                         </td>
                         <td className="py-2 text-right text-emerald-400 font-medium">
                           {ds.isPrimary ? '1.00' : '0.82'}
@@ -1243,15 +1260,15 @@ export const InteractiveChart: React.FC<InteractiveChartProps> = ({
                     {symbol}
                   </span>
                   <span className="text-xs font-mono-val font-semibold" style={{ color: 'var(--text-primary)' }}>
-                    ${primaryData[primaryData.length - 1]?.close.toFixed(2)}
+                    ${(primaryData[primaryData.length - 1]?.close ?? 0).toFixed(2)}
                   </span>
                 </div>
                 <span
                   className="text-xs font-mono-val font-semibold"
-                  style={{ color: changePct >= 0 ? 'var(--color-positive)' : 'var(--color-negative)' }}
+                  style={{ color: (changePct ?? 0) >= 0 ? 'var(--color-positive)' : 'var(--color-negative)' }}
                 >
-                  {changePct >= 0 ? '+' : ''}
-                  {changePct.toFixed(2)}%
+                  {(changePct ?? 0) >= 0 ? '+' : ''}
+                  {(changePct ?? 0).toFixed(2)}%
                 </span>
               </div>
 
@@ -1302,7 +1319,7 @@ export const InteractiveChart: React.FC<InteractiveChartProps> = ({
                     {secondarySymbol}
                   </span>
                   <span className="text-xs font-mono-val font-semibold" style={{ color: 'var(--text-primary)' }}>
-                    ${secondaryData[secondaryData.length - 1]?.close.toFixed(2)}
+                    ${(secondaryData[secondaryData.length - 1]?.close ?? 0).toFixed(2)}
                   </span>
                 </div>
                 <span className="text-xs font-mono-val font-semibold text-emerald-400">

@@ -39,7 +39,7 @@ import {
   ApiConfig,
   TickerItem,
 } from '../types';
-import { fetchLocalSignalData } from '../data';
+import { fetchLocalSignalData, getUniverseTicker } from '../data';
 import { useTimezone } from '../context/TimezoneContext';
 
 const DEFAULT_BACKTEST_PARAMS: BacktestParams = {
@@ -192,12 +192,13 @@ export const SignalBacktest: React.FC<SignalBacktestProps> = ({
   const getLivePrice = (assetSymbol: string): number => {
     const sym = assetSymbol.toUpperCase();
     const found = tickers.find((t) => {
-      const ts = t.symbol.toUpperCase();
-      return ts === sym || ts.startsWith(sym) || sym.startsWith(ts);
+      const ts = t?.symbol?.toUpperCase();
+      return ts === sym || ts?.startsWith(sym) || sym.startsWith(ts || '');
     });
-    if (found && found.price > 0) return found.price;
-    // Strict lookup: If not in tickers array, search fallback universe
-    return 100.0;
+    if (found && typeof found.price === 'number' && found.price > 0 && !found.isOffline) return found.price;
+    const uTicker = getUniverseTicker(sym);
+    if (uTicker && typeof uTicker.price === 'number' && uTicker.price > 0 && !uTicker.isOffline) return uTicker.price;
+    return 0;
   };
 
   // Generate dynamic series of equity points based on parameters & timeframe
@@ -1702,7 +1703,13 @@ if __name__ == "__main__":
                                 {asset}
                               </span>
                               <span className="text-[10px] font-medium" style={{ color: 'var(--text-muted)' }}>
-                                ${livePrice < 10 ? livePrice.toFixed(3) : livePrice.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                {livePrice > 0 ? (
+                                  `$${livePrice < 10 ? livePrice.toFixed(3) : livePrice.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+                                ) : (
+                                  <span className="text-[9px] px-1 py-0.2 rounded font-semibold bg-rose-500/10 text-rose-400 border border-rose-500/20">
+                                    API offline
+                                  </span>
+                                )}
                               </span>
                             </div>
                           </td>

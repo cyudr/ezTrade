@@ -511,7 +511,7 @@ export const StrategyPerformance: React.FC<StrategyPerformanceProps> = ({
                       className="py-2 text-right font-semibold"
                       style={{ color: 'var(--text-primary)' }}
                     >
-                      ${fill.price.toFixed(2)}
+                      ${(fill.price ?? 0).toFixed(2)}
                     </td>
                     <td
                       className="py-2 text-right font-medium"

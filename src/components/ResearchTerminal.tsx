@@ -653,15 +653,28 @@ export const ResearchTerminal: React.FC<ResearchTerminalProps> = ({
                           </div>
 
                           <div className="flex flex-col items-end shrink-0 pl-2">
-                            <span className="text-xs font-bold font-mono-val" style={{ color: 'var(--text-primary)' }}>
-                              ${t.price.toFixed(2)}
-                            </span>
-                            <span
-                              className="text-[10px] font-semibold font-mono-val"
-                              style={{ color: isPos ? 'var(--color-positive)' : 'var(--color-negative)' }}
-                            >
-                              {isPos ? '+' : ''}{t.changePct.toFixed(2)}%
-                            </span>
+                            {(t.price ?? 0) > 0 && !t.isOffline ? (
+                              <>
+                                <span className="text-xs font-bold font-mono-val" style={{ color: 'var(--text-primary)' }}>
+                                  ${(t.price ?? 0).toFixed(2)}
+                                </span>
+                                <span
+                                  className="text-[10px] font-semibold font-mono-val"
+                                  style={{ color: isPos ? 'var(--color-positive)' : 'var(--color-negative)' }}
+                                >
+                                  {isPos ? '+' : ''}{(t.changePct ?? 0).toFixed(2)}%
+                                </span>
+                              </>
+                            ) : (
+                              <>
+                                <span className="text-[10px] px-1.5 py-0.2 rounded font-semibold bg-rose-500/10 text-rose-400 border border-rose-500/20 font-mono-val">
+                                  API offline
+                                </span>
+                                <span className="text-[9px] font-mono-val" style={{ color: 'var(--text-muted)' }}>
+                                  —
+                                </span>
+                              </>
+                            )}
                           </div>
                         </div>
                       );

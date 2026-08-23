@@ -99,7 +99,7 @@ export const PortfolioSummary: React.FC<PortfolioSummaryProps> = ({
     setOrderTicker(item.ticker);
     setOrderSide(item.signal === 'SELL' ? 'SELL' : 'BUY');
     const uTicker = getUniverseTicker(item.ticker);
-    if (uTicker) {
+    if (uTicker && typeof uTicker.price === 'number') {
       setLimitPrice(uTicker.price.toFixed(2));
     } else {
       setLimitPrice('150.00');
@@ -145,7 +145,7 @@ export const PortfolioSummary: React.FC<PortfolioSummaryProps> = ({
             </strong>{' '}
             | Day PnL:{' '}
             <strong style={{ color: 'var(--color-positive)' }}>
-              +{dayPnlPct.toFixed(2)}% (+{formatMoney(dayPnlDollars, 0)})
+              +{(dayPnlPct ?? 0).toFixed(2)}% (+{formatMoney(dayPnlDollars, 0)})
             </strong>
           </p>
         </div>
@@ -238,7 +238,8 @@ export const PortfolioSummary: React.FC<PortfolioSummaryProps> = ({
                       key={pos.id}
                       onClick={() => {
                         setOrderTicker(pos.ticker);
-                        setLimitPrice((pos.lastPrice > 0 ? pos.lastPrice : pos.entryPrice).toFixed(2));
+                        const effectivePrice = (pos.lastPrice ?? 0) > 0 ? pos.lastPrice : (pos.entryPrice ?? 0);
+                        setLimitPrice((effectivePrice ?? 0).toFixed(2));
                       }}
                       className="border-b transition-colors group cursor-pointer"
                       style={{ borderColor: 'var(--border-subtle)' }}
@@ -259,13 +260,13 @@ export const PortfolioSummary: React.FC<PortfolioSummaryProps> = ({
                         {pos.size.toLocaleString()}
                       </td>
                       <td className="py-2.5 text-right" style={{ color: 'var(--text-secondary)' }}>
-                        {pos.entryPrice.toFixed(2)}
+                        {(pos.entryPrice ?? 0).toFixed(2)}
                       </td>
                       <td
                         className="py-2.5 text-right font-semibold"
                         style={{ color: 'var(--text-primary)' }}
                       >
-                        {pos.lastPrice > 0 ? pos.lastPrice.toFixed(2) : pos.entryPrice.toFixed(2)}
+                        {(pos.lastPrice ?? 0) > 0 ? (pos.lastPrice ?? 0).toFixed(2) : (pos.entryPrice ?? 0).toFixed(2)}
                       </td>
                       <td
                         className="py-2.5 text-right font-semibold"
@@ -476,10 +477,10 @@ export const PortfolioSummary: React.FC<PortfolioSummaryProps> = ({
                         )}
                       </td>
                       <td className="py-2 text-right" style={{ color: 'var(--text-secondary)' }}>
-                        {item.beta.toFixed(2)}
+                        {(item.beta ?? 1.0).toFixed(2)}
                       </td>
                       <td className="py-2 text-right" style={{ color: 'var(--text-secondary)' }}>
-                        {item.volatility30d}
+                        {item.volatility30d || '25.0%'}
                       </td>
                       <td
                         className="py-2 text-right font-semibold"
@@ -488,7 +489,7 @@ export const PortfolioSummary: React.FC<PortfolioSummaryProps> = ({
                         }}
                       >
                         {isDistPos ? '+' : ''}
-                        {item.dist200dMa.toFixed(1)}%
+                        {(item.dist200dMa ?? 0).toFixed(1)}%
                       </td>
                       <td className="py-2 text-right">
                         <span

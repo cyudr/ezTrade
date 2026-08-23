@@ -72,11 +72,12 @@ export const MarketOverview: React.FC<MarketOverviewProps> = ({
     return {
       symbol: sym,
       name: `${sym} Asset`,
-      price: 100.0,
+      price: 0,
       change: 0,
       changePct: 0,
-      sparkline: [100, 100, 100, 100, 100],
+      sparkline: [],
       assetClass: 'US_EQUITY',
+      isOffline: true,
     };
   };
 
@@ -232,7 +233,8 @@ export const MarketOverview: React.FC<MarketOverviewProps> = ({
       >
         <div className="ticker-animation flex items-center">
           {tickers.concat(tickers).map((t, idx) => {
-            const isPos = t.changePct >= 0;
+            const isAvailable = (t.price ?? 0) > 0 && !t.isOffline;
+            const isPos = isAvailable ? (t.changePct ?? 0) >= 0 : false;
             const session = getMarketSessionForSymbol(t.symbol);
             const isMatch =
               searchQuery &&
@@ -255,22 +257,30 @@ export const MarketOverview: React.FC<MarketOverviewProps> = ({
                 <span className="font-bold" style={{ color: isMatch ? 'var(--accent-primary)' : 'var(--text-muted)' }}>
                   {t.symbol}
                 </span>
-                <span
-                  className={t.tickStatus ? `tick-${t.tickStatus} font-semibold` : 'font-semibold'}
-                  style={{
-                    color: isPos ? 'var(--color-positive)' : 'var(--color-negative)',
-                  }}
-                >
-                  {t.price > 1000
-                    ? t.price.toLocaleString('en-US', { minimumFractionDigits: 2 })
-                    : t.price.toFixed(t.price < 10 ? 4 : 2)}
-                </span>
-                <span
-                  className="text-[10px] opacity-90"
-                  style={{ color: isPos ? 'var(--color-positive)' : 'var(--color-negative)' }}
-                >
-                  {isPos ? `+${t.changePct.toFixed(2)}%` : `${t.changePct.toFixed(2)}%`}
-                </span>
+                {isAvailable ? (
+                  <>
+                    <span
+                      className={t.tickStatus ? `tick-${t.tickStatus} font-semibold` : 'font-semibold'}
+                      style={{
+                        color: isPos ? 'var(--color-positive)' : 'var(--color-negative)',
+                      }}
+                    >
+                      {(t.price ?? 0) > 1000
+                        ? (t.price ?? 0).toLocaleString('en-US', { minimumFractionDigits: 2 })
+                        : (t.price ?? 0).toFixed((t.price ?? 0) < 10 ? 4 : 2)}
+                    </span>
+                    <span
+                      className="text-[10px] opacity-90"
+                      style={{ color: isPos ? 'var(--color-positive)' : 'var(--color-negative)' }}
+                    >
+                      {isPos ? `+${(t.changePct ?? 0).toFixed(2)}%` : `${(t.changePct ?? 0).toFixed(2)}%`}
+                    </span>
+                  </>
+                ) : (
+                  <span className="text-[10px] px-1.5 py-0.2 rounded font-semibold bg-rose-500/10 text-rose-400 border border-rose-500/20 font-mono-val">
+                    API offline
+                  </span>
+                )}
                 {!session.isOpen && session.assetClass !== 'CRYPTO' && (
                   <span
                     className="text-[9px] px-1 py-0.2 rounded font-medium opacity-60 uppercase"
@@ -445,14 +455,26 @@ export const MarketOverview: React.FC<MarketOverviewProps> = ({
 
                       <div className="text-right font-mono-val">
                         <div className="font-bold text-xs" style={{ color: 'var(--text-primary)' }}>
-                          ${ticker.price > 10 ? ticker.price.toFixed(2) : ticker.price.toFixed(4)}
+                          {(ticker.price ?? 0) > 0 && !ticker.isOffline ? (
+                            `$${(ticker.price ?? 0) > 10 ? (ticker.price ?? 0).toFixed(2) : (ticker.price ?? 0).toFixed(4)}`
+                          ) : (
+                            <span className="text-[10px] px-1.5 py-0.2 rounded font-semibold bg-rose-500/10 text-rose-400 border border-rose-500/20">
+                              API offline
+                            </span>
+                          )}
                         </div>
-                        <div
-                          className="text-[10px] font-semibold"
-                          style={{ color: isUp ? 'var(--color-positive)' : 'var(--color-negative)' }}
-                        >
-                          {isUp ? '+' : ''}{ticker.changePct.toFixed(2)}%
-                        </div>
+                        {(ticker.price ?? 0) > 0 && !ticker.isOffline ? (
+                          <div
+                            className="text-[10px] font-semibold"
+                            style={{ color: isUp ? 'var(--color-positive)' : 'var(--color-negative)' }}
+                          >
+                            {isUp ? '+' : ''}{(ticker.changePct ?? 0).toFixed(2)}%
+                          </div>
+                        ) : (
+                          <div className="text-[9px]" style={{ color: 'var(--text-muted)' }}>
+                            —
+                          </div>
+                        )}
                       </div>
                     </div>
 
@@ -561,18 +583,33 @@ export const MarketOverview: React.FC<MarketOverviewProps> = ({
                         }}
                       >
                         {isUp ? <ArrowUpRight className="w-3 h-3" /> : <ArrowDownRight className="w-3 h-3" />}
-                        {isUp ? `+${item.changePct.toFixed(2)}%` : `${item.changePct.toFixed(2)}%`}
+                        {isUp ? `+${(item.changePct ?? 0).toFixed(2)}%` : `${(item.changePct ?? 0).toFixed(2)}%`}
                       </div>
                     </div>
 
                     {/* Price Quote */}
                     <div className="my-1.5">
-                      <span className="font-mono-val text-lg font-bold" style={{ color: 'var(--text-primary)' }}>
-                        ${item.price > 100 ? item.price.toLocaleString('en-US', { minimumFractionDigits: 2 }) : item.price.toFixed(4)}
-                      </span>
-                      <div className="text-[11px] font-mono-val" style={{ color: 'var(--text-muted)' }}>
-                        {item.change >= 0 ? '+' : ''}${item.change.toFixed(2)} today
-                      </div>
+                      {(item.price ?? 0) > 0 && !item.isOffline ? (
+                        <>
+                          <span className="font-mono-val text-lg font-bold" style={{ color: 'var(--text-primary)' }}>
+                            {(item.price ?? 0) > 100 ? (item.price ?? 0).toLocaleString('en-US', { minimumFractionDigits: 2 }) : (item.price ?? 0).toFixed(4)}
+                          </span>
+                          <div className="text-[11px] font-mono-val" style={{ color: 'var(--text-muted)' }}>
+                            {(item.change ?? 0) >= 0 ? '+' : ''}${(item.change ?? 0).toFixed(2)} today
+                          </div>
+                        </>
+                      ) : (
+                        <>
+                          <div>
+                            <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-rose-500/10 text-rose-400 border border-rose-500/20 font-mono-val">
+                              API offline
+                            </span>
+                          </div>
+                          <div className="text-[11px] font-mono-val mt-0.5" style={{ color: 'var(--text-muted)' }}>
+                            Data unavailable
+                          </div>
+                        </>
+                      )}
                     </div>
 
                     {/* Sparkline */}
@@ -858,6 +895,7 @@ export const MarketOverview: React.FC<MarketOverviewProps> = ({
           initialSearchQuery={searchQuery}
           onSearchChange={onSearchChange}
           onSelectTicker={(ticker) => handleTickerClick(ticker.symbol)}
+          liveTickers={tickers}
         />
       )}
     </div>

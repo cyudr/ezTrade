@@ -587,19 +587,25 @@ export function mergeLiveDataIntoTickers(
     updated.forEach((ticker, idx) => {
       const liveStock = stockData[ticker.symbol];
       if (liveStock) {
-        const prevPrice = ticker.price;
-        const newPrice = liveStock.price;
+        const prevPrice = typeof ticker.price === 'number' ? ticker.price : 100;
+        const newPrice = typeof liveStock.price === 'number' ? liveStock.price : prevPrice;
+        const change = typeof liveStock.change === 'number' ? liveStock.change : (ticker.change ?? 0);
+        const changePct = typeof liveStock.changePct === 'number' ? liveStock.changePct : (ticker.changePct ?? 0);
+        const high = typeof liveStock.high === 'number' ? liveStock.high : (ticker.high ?? newPrice);
+        const low = typeof liveStock.low === 'number' ? liveStock.low : (ticker.low ?? newPrice);
+        const lastClose = typeof liveStock.lastClose === 'number' ? liveStock.lastClose : (ticker.lastClose ?? (newPrice - change));
+
         updated[idx] = {
           ...ticker,
           name: liveStock.name || ticker.name,
           price: newPrice,
-          change: liveStock.change,
-          changePct: liveStock.changePct,
-          high: liveStock.high || ticker.high,
-          low: liveStock.low || ticker.low,
+          change,
+          changePct,
+          high,
+          low,
           volume: liveStock.volume || ticker.volume,
           sparkline: liveStock.sparkline?.length ? liveStock.sparkline : ticker.sparkline,
-          lastClose: liveStock.lastClose || ticker.lastClose,
+          lastClose,
           tickStatus: newPrice > prevPrice ? 'up' : newPrice < prevPrice ? 'down' : undefined,
           isMarketOpen: true,
         };
@@ -635,14 +641,13 @@ export function mergeLiveDataIntoTickers(
       if (mapping && cryptoData[mapping.id]) {
         const coin = cryptoData[mapping.id];
         const isSgd = mapping.currency === 'sgd';
-        const newPrice = (isSgd ? coin.sgd : coin.usd) ?? ticker.price;
-        const changePct =
-          (isSgd ? coin.sgd_24h_change : coin.usd_24h_change) ??
-          coin.usd_24h_change ??
-          ticker.changePct;
+        const rawNewPrice = isSgd ? coin.sgd : coin.usd;
+        const newPrice = typeof rawNewPrice === 'number' ? rawNewPrice : (ticker.price ?? 100);
+        const rawChangePct = (isSgd ? coin.sgd_24h_change : coin.usd_24h_change) ?? coin.usd_24h_change ?? ticker.changePct;
+        const changePct = typeof rawChangePct === 'number' ? rawChangePct : (ticker.changePct ?? 0);
         const change = (newPrice * changePct) / 100;
         const rawVol = isSgd ? coin.sgd_24h_vol : coin.usd_24h_vol;
-        const vol = rawVol
+        const vol = rawVol && typeof rawVol === 'number'
           ? `${isSgd ? 'S$' : '$'}${(rawVol / 1e9).toFixed(2)}B`
           : ticker.volume;
 
@@ -652,8 +657,8 @@ export function mergeLiveDataIntoTickers(
           ...ticker,
           assetClass: 'CRYPTO',
           price: newPrice,
-          change: parseFloat(change.toFixed(2)),
-          changePct: parseFloat(changePct.toFixed(2)),
+          change: parseFloat((change || 0).toFixed(2)),
+          changePct: parseFloat((changePct || 0).toFixed(2)),
           volume: vol,
           sparkline: spark,
           tickStatus: newPrice > ticker.price ? 'up' : newPrice < ticker.price ? 'down' : undefined,

@@ -25,6 +25,7 @@ import {
 import {
   TICKER_VERSE,
   getUniverseTicker,
+  updateUniversePrices,
   fetchFrankfurterLatest,
   fetchCoinGeckoPrices,
   fetchLiveStocks,
@@ -282,6 +283,9 @@ export default function App() {
     });
 
     if (fxData || cryptoData || (stockData && Object.keys(stockData).length > 0)) {
+      if (stockData) {
+        updateUniversePrices(stockData);
+      }
       setTickers((prev) => mergeLiveDataIntoTickers(prev, fxData, cryptoData, stockData));
       
       // Also sync current position values with real market quotes
@@ -411,7 +415,7 @@ export default function App() {
 
     addNotification(
       `Order Filled: ${order.side} ${order.qty} ${order.ticker}`,
-      `Executed via Opti-Core DMA at $${order.limitPrice.toFixed(2)} (${order.type}). Routing Latency: 11ms.`,
+      `Executed via Opti-Core DMA at $${(order.limitPrice ?? 0).toFixed(2)} (${order.type}). Routing Latency: 11ms.`,
       'success'
     );
   };

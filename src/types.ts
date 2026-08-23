@@ -24,6 +24,7 @@ export interface TickerItem {
   assetClass?: 'US_EQUITY' | 'CRYPTO' | 'FX' | 'SGX' | 'BOND';
   lastClose?: number;
   isMarketOpen?: boolean;
+  isOffline?: boolean;
 }
 
 export interface SentimentItem {

@@ -21,16 +21,20 @@ import {
   X,
 } from 'lucide-react';
 
+import { TickerItem } from '../types';
+
 interface TickerVerseExplorerProps {
   initialSearchQuery?: string;
   onSearchChange?: (query: string) => void;
   onSelectTicker?: (ticker: UniverseTicker) => void;
+  liveTickers?: TickerItem[];
 }
 
 export const TickerVerseExplorer: React.FC<TickerVerseExplorerProps> = ({
   initialSearchQuery = '',
   onSearchChange,
   onSelectTicker,
+  liveTickers,
 }) => {
   const [selectedSector, setSelectedSector] = useState<SectorCategory>('ALL');
   const [searchQuery, setSearchQuery] = useState(initialSearchQuery);
@@ -59,8 +63,8 @@ export const TickerVerseExplorer: React.FC<TickerVerseExplorerProps> = ({
   };
 
   const filteredTickers = useMemo(() => {
-    return searchTickerVerse(searchQuery, selectedSector, sortBy, activeFacet);
-  }, [searchQuery, selectedSector, sortBy, activeFacet]);
+    return searchTickerVerse(searchQuery, selectedSector, sortBy, activeFacet, liveTickers);
+  }, [searchQuery, selectedSector, sortBy, activeFacet, liveTickers]);
 
   const sectorsList = Object.keys(SECTOR_METADATA) as SectorCategory[];
 
@@ -320,13 +324,15 @@ export const TickerVerseExplorer: React.FC<TickerVerseExplorerProps> = ({
 
                   <div className="text-right font-mono-val">
                     <div className="font-bold text-sm" style={{ color: 'var(--text-primary)' }}>
-                      {ticker.price > 0 ? (
-                        `$${ticker.price > 10 ? ticker.price.toFixed(2) : ticker.price.toFixed(4)}`
+                      {(ticker.price ?? 0) > 0 && !ticker.isOffline ? (
+                        `$${(ticker.price ?? 0) > 10 ? (ticker.price ?? 0).toFixed(2) : (ticker.price ?? 0).toFixed(4)}`
                       ) : (
-                        <span className="text-xs text-emerald-500 font-normal">Live Feed Synced</span>
+                        <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[11px] font-semibold bg-rose-500/10 text-rose-400 border border-rose-500/20">
+                          API offline
+                        </span>
                       )}
                     </div>
-                    {ticker.price > 0 ? (
+                    {(ticker.price ?? 0) > 0 && !ticker.isOffline ? (
                       <div
                         className="text-[11px] font-semibold flex items-center justify-end gap-0.5"
                         style={{ color: isUp ? 'var(--color-positive)' : 'var(--color-negative)' }}
@@ -334,12 +340,12 @@ export const TickerVerseExplorer: React.FC<TickerVerseExplorerProps> = ({
                         {isUp ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
                         <span>
                           {isUp ? '+' : ''}
-                          {ticker.changePct.toFixed(2)}%
+                          {(ticker.changePct ?? 0).toFixed(2)}%
                         </span>
                       </div>
                     ) : (
-                      <div className="text-[10px] text-muted-foreground" style={{ color: 'var(--text-muted)' }}>
-                        Streaming L1
+                      <div className="text-[10px]" style={{ color: 'var(--text-muted)' }}>
+                        Data unavailable
                       </div>
                     )}
                   </div>
