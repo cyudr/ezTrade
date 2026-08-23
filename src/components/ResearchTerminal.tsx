@@ -33,12 +33,13 @@ import {
   computeStatsFromTimeSeries,
   fetchCoinGeckoPrices,
   fetchTimeseriesData,
-} from '../services/apiService';
+  TICKER_VERSE,
+  UniverseTicker,
+  getTickerApiStatus,
+} from '../data';
 import { DistributionBin, ScatterPoint } from '../types';
 import { useTimezone } from '../context/TimezoneContext';
 import { InteractiveChart } from './InteractiveChart';
-import { TICKER_VERSE, UniverseTicker } from '../data/tickerVerse';
-import { getTickerApiStatus } from '../utils/tickerApiStatus';
 
 interface ResearchTerminalProps {
   selectedTicker?: string;

@@ -16,7 +16,7 @@ import {
   Wifi,
 } from 'lucide-react';
 import { SystemHealth } from '../types';
-import { fetchApiHealth } from '../services/apiService';
+import { fetchApiHealth } from '../data';
 
 interface StrategyPerformanceProps {
   onExportCsv?: () => void;

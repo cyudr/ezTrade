@@ -19,9 +19,13 @@ import {
   Wifi,
 } from 'lucide-react';
 import { TickerItem, SentimentItem } from '../types';
-import { getUniverseTicker, searchTickerVerse, UniverseTicker } from '../data/tickerVerse';
-import { getMarketSessionForSymbol } from '../utils/marketHours';
-import { getTickerApiStatus } from '../utils/tickerApiStatus';
+import {
+  getUniverseTicker,
+  searchTickerVerse,
+  UniverseTicker,
+  getMarketSessionForSymbol,
+  getTickerApiStatus,
+} from '../data';
 import { TickerVerseExplorer } from './TickerVerseExplorer';
 
 interface MarketOverviewProps {

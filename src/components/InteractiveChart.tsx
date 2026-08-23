@@ -7,7 +7,7 @@ import {
   ActiveIndicators,
   DEFAULT_ACTIVE_INDICATORS,
   generateChartDataForInterval,
-} from '../utils/indicators';
+} from '../data';
 import {
   SlidersHorizontal,
   Maximize2,
@@ -26,7 +26,7 @@ import {
   ArrowRightLeft,
   Check,
 } from 'lucide-react';
-import { TICKER_VERSE } from '../data/tickerVerse';
+import { TICKER_VERSE } from '../data';
 
 export type ChartDisplayMode = 'SINGLE' | 'OVERLAP' | 'SIDE_BY_SIDE';
 

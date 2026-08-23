@@ -33,7 +33,8 @@ import {
   fetchFrankfurterLatest,
   fetchCoinGeckoPrices,
   fetchLocalSignalData,
-} from '../services/apiService';
+  testEndpointPing,
+} from '../data';
 
 interface NewAllocationModalProps {
   isOpen: boolean;
@@ -493,17 +494,13 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     setIsTesting(true);
     setTestResult(null);
     try {
-      const startTime = performance.now();
-      const res = await fetch(localUrl, {
-        method: 'GET',
-        headers: { 'Content-Type': 'application/json' },
-        signal: AbortSignal.timeout(2500),
-      });
-      const latency = Math.round(performance.now() - startTime);
-      if (res.ok) {
-        setTestResult(`🟢 Connected (${latency}ms) - HTTP ${res.status}`);
+      const pingRes = await testEndpointPing(localUrl, 2500);
+      if (pingRes.ok) {
+        setTestResult(`🟢 Connected (${pingRes.latencyMs}ms) - HTTP ${pingRes.status}`);
+      } else if (pingRes.status > 0) {
+        setTestResult(`🟡 Server reached but returned HTTP ${pingRes.status} (${pingRes.latencyMs}ms)`);
       } else {
-        setTestResult(`🟡 Server reached but returned HTTP ${res.status}`);
+        setTestResult(`⚪ Local server offline / unreachable (Fallback active)`);
       }
     } catch (e: any) {
       setTestResult(`⚪ Local server offline / unreachable (Fallback active)`);

@@ -5,7 +5,8 @@ import {
   SECTOR_METADATA,
   searchTickerVerse,
   UniverseTicker,
-} from '../data/tickerVerse';
+  getTickerApiStatus,
+} from '../data';
 import {
   Search,
   TrendingUp,
@@ -19,7 +20,6 @@ import {
   Crown,
   X,
 } from 'lucide-react';
-import { getTickerApiStatus } from '../utils/tickerApiStatus';
 
 interface TickerVerseExplorerProps {
   initialSearchQuery?: string;

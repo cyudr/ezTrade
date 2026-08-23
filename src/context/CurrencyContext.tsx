@@ -6,7 +6,7 @@ import {
   convertCurrency,
   formatCurrencyAmount,
   DEFAULT_CURRENCY_CODE,
-} from '../data/currencies';
+} from '../data';
 
 export type { CurrencyOption };
 export { CURRENCY_OPTIONS };

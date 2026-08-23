@@ -8,7 +8,7 @@ import {
   formatRelativeTime,
   generateRollingHours,
   DEFAULT_TIMEZONE,
-} from '../data/timezones';
+} from '../data';
 
 export type { TimezoneOption };
 export { TIMEZONE_OPTIONS };

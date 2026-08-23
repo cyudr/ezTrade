@@ -39,7 +39,7 @@ import {
   ApiConfig,
   TickerItem,
 } from '../types';
-import { fetchLocalSignalData } from '../services/apiService';
+import { fetchLocalSignalData } from '../data';
 import { useTimezone } from '../context/TimezoneContext';
 
 const DEFAULT_BACKTEST_PARAMS: BacktestParams = {

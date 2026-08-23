@@ -17,7 +17,7 @@ import {
 import confetti from 'canvas-confetti';
 import { PositionItem, WatchlistItem, SectorAllocation } from '../types';
 import { useCurrency } from '../context/CurrencyContext';
-import { getUniverseTicker } from '../data/tickerVerse';
+import { getUniverseTicker } from '../data';
 
 interface PortfolioSummaryProps {
   positions: PositionItem[];
